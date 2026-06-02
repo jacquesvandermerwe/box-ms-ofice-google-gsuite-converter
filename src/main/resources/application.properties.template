@@ -13,6 +13,15 @@ box.config.file=/absolute/path/to/box_config.json
 # - Good for initial testing, not suitable for production
 # box.developer.token=YOUR_BOX_DEV_TOKEN
 
+# Box As-User Header (optional but often required)
+# When using JWT/service account, you typically need to specify which Box user to act as
+# The service account itself has no files - it must impersonate a user to access their content
+# Find your Box user ID:
+#   Method 1: Go to https://app.box.com/master/settings and look at the URL
+#   Method 2: Use Box API to list users: https://developer.box.com/reference/get-users/
+#   Method 3: Box CLI: box users:get YOUR_EMAIL
+# box.as.user.id=YOUR_BOX_USER_ID
+
 # Google Drive Configuration
 # For Google Workspace (service account with domain-wide delegation):
 #   - Set google.auth.type=service_account

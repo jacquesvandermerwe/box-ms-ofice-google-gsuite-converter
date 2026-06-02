@@ -15,9 +15,19 @@ import java.util.List;
 public class BoxService {
     private static final Logger logger = LoggerFactory.getLogger(BoxService.class);
     private final BoxAPIConnection api;
+    private final String asUserId;
 
     public BoxService(BoxAPIConnection api) {
+        this(api, null);
+    }
+
+    public BoxService(BoxAPIConnection api, String asUserId) {
         this.api = api;
+        this.asUserId = asUserId;
+        if (asUserId != null && !asUserId.isEmpty()) {
+            logger.info("Box service configured to act as user: {}", asUserId);
+            api.asUser(asUserId);
+        }
     }
 
     public InputStream downloadFile(String boxFileId) {

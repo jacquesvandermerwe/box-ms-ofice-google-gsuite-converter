@@ -105,6 +105,10 @@ public class AppConfig {
         return getProperty("box.config.file");
     }
 
+    public String getBoxAsUserId() {
+        return getProperty("box.as.user.id");
+    }
+
     public String getGoogleCredentialsFile() {
         return getProperty("google.credentials.file");
     }
