@@ -4,6 +4,18 @@
 
 This guide will walk you through setting up and running the Box to Google Drive migration tool.
 
+### Common Setup Issues (Quick Reference)
+
+**Most common setup problems and solutions:**
+
+1. **"Security error while uploading"** → Domain-wide delegation not authorized in Admin Console
+2. **"Invalid Client ID"** → Used service account email instead of numeric Client ID
+3. **"Subject not found"** → User email not in your Workspace domain or delegation not propagated
+4. **"Application data vs User data"** → Always choose "Application data" for service account
+5. **Can't find delegation settings** → Must be Super Admin in Google Workspace Admin Console
+
+See the [Troubleshooting](#troubleshooting) section for detailed solutions.
+
 ## System Requirements
 
 - **Java**: Java 21 or higher (required for virtual threads)
@@ -85,8 +97,29 @@ In the Box Developer Console, ensure your app has:
 
 ### 2.3 Create Service Account
 
+**Important**: This migration tool uses a **service account** (not OAuth user login) so it can upload files to multiple users' Google Drives based on the `user_email` in your CSV, without requiring interactive sign-in each time.
+
+#### Option A: Using the Credentials Wizard (Recommended for First-Time Users)
+
 1. Go to **APIs & Services** → **Credentials**
-2. Click **+ CREATE CREDENTIALS** → **Service Account**
+2. Click **+ CREATE CREDENTIALS** → Select **Help me choose**
+3. On the "Create credentials" wizard:
+   - **Which API are you using?** → Select **Google Drive API**
+   - **What data will you be accessing?** → Select **Application data** ✅
+     - ⚠️ **Do NOT select "User data"** - that creates OAuth, which requires browser sign-in
+   - Click **Next**
+4. Fill in service account details:
+   - **Service account name**: `box-migration-service`
+   - **Service account ID**: (auto-generated)
+   - **Service account description**: "Service account for Box to Google Drive migration"
+5. Click **Create and Continue**
+6. Grant role: **None needed** (we'll use domain-wide delegation instead)
+7. Click **Continue** → **Done**
+
+#### Option B: Direct Service Account Creation (Faster if You Know What You're Doing)
+
+1. Go to **APIs & Services** → **Credentials**
+2. Click **+ CREATE CREDENTIALS** → **Service Account** (skip the wizard)
 3. Service account details:
    - **Name**: `box-migration-service`
    - **Service account ID**: (auto-generated)
@@ -94,6 +127,12 @@ In the Box Developer Console, ensure your app has:
 4. Click **Create and Continue**
 5. Grant role: **None needed** (we'll use domain-wide delegation)
 6. Click **Continue** → **Done**
+
+> **Why Application Data / Service Account?**
+> - Service accounts act on behalf of users without interactive login
+> - Perfect for automated migrations across multiple user accounts
+> - Works with domain-wide delegation to impersonate users
+> - "User data" OAuth is for apps where users click "Allow" in browser - not needed here
 
 ### 2.4 Create Service Account Key
 
@@ -107,23 +146,65 @@ In the Box Developer Console, ensure your app has:
 
 ### 2.5 Enable Domain-Wide Delegation
 
-1. Still in the service account page, click **Show Advanced Settings**
-2. Under "Domain-wide delegation", click **Enable G Suite Domain-wide Delegation**
-3. **Copy the Client ID** (you'll need this next)
+Domain-wide delegation allows the service account to act on behalf of any user in your Google Workspace domain.
+
+1. Go back to **APIs & Services** → **Credentials**
+2. Find your service account in the **Service Accounts** section
+3. Click on the service account email (e.g., `box-migration-service@your-project.iam.gserviceaccount.com`)
+4. Click the **Details** tab
+5. Scroll down to **Domain-wide delegation** section
+6. Check the box: **Enable Google Workspace Domain-wide Delegation**
+7. **Copy the Client ID** (numeric, looks like: `1234567890123456789`)
+   - You'll need this in the next step
+   - This is **different** from the service account email
+
+> **Troubleshooting**: If you don't see "Domain-wide delegation", make sure:
+> - You're viewing the service account details page (not the credentials list)
+> - You have Google Workspace admin privileges
+> - Your Google Cloud project is associated with a Workspace domain
 
 ### 2.6 Authorize in Google Workspace Admin Console
 
-1. Log in to [Google Admin Console](https://admin.google.com/)
-2. Go to **Security** → **Access and data control** → **API Controls**
-3. Scroll to **Domain-wide Delegation**
-4. Click **Add new**
-5. Paste the **Client ID** from step 2.5
-6. Add OAuth Scopes:
-   ```
-   https://www.googleapis.com/auth/drive
-   https://www.googleapis.com/auth/drive.file
-   ```
-7. Click **Authorize**
+**This is the critical step** that allows the service account to upload files to users' Google Drives.
+
+1. Log in to [Google Admin Console](https://admin.google.com/) as a **Super Admin**
+2. Navigate to **Security** → **Access and data control** → **API Controls**
+3. Scroll down to the **Domain-wide Delegation** section
+4. Click **Add new** (or **Manage Domain-Wide Delegation** → **Add new**)
+5. Fill in the form:
+   - **Client ID**: Paste the numeric Client ID from step 2.5 (e.g., `1234567890123456789`)
+     - ⚠️ **Do NOT use the service account email** - use the Client ID number
+   - **OAuth Scopes**: Add **both** of these scopes (comma-separated or one per line):
+     ```
+     https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.file
+     ```
+6. Click **Authorize**
+7. Verify the entry appears in the Domain-wide Delegation list
+
+> **Common Issues**:
+> - **"Invalid Client ID"**: Make sure you copied the numeric Client ID, not the email
+> - **Can't find API Controls**: You must be a Super Admin in Google Workspace
+> - **Wrong navigation path**: Google Admin UI changes - search for "Domain-wide Delegation" if menu differs
+> 
+> **What These Scopes Mean**:
+> - `drive`: Full access to read/write files (needed for creating folders and uploading)
+> - `drive.file`: Access to files created by this app (additional permission for file operations)
+
+### 2.7 Verify Domain-Wide Delegation Setup
+
+Before proceeding, verify your setup:
+
+1. ✅ Service account created in Google Cloud Console
+2. ✅ JSON key downloaded
+3. ✅ Domain-wide delegation enabled on the service account
+4. ✅ Client ID authorized in Google Workspace Admin Console with both Drive scopes
+5. ✅ You have the service account email and Client ID noted down
+
+**Test Checklist**:
+- [ ] Can you see the service account in Google Cloud Console → IAM & Admin → Service Accounts?
+- [ ] Does the service account have domain-wide delegation enabled (check Details tab)?
+- [ ] Is the Client ID listed in Admin Console → Security → API Controls → Domain-wide Delegation?
+- [ ] Are both Drive scopes listed next to the Client ID?
 
 ## Step 3: Get Box File IDs
 
@@ -165,7 +246,13 @@ box folders:items 0  # 0 = root folder
    cd /path/to/box-google-converter
    ```
 
-2. Edit `src/main/resources/application.properties`:
+2. Copy the template to create your configuration file:
+   ```bash
+   cp src/main/resources/application.properties.template \
+      src/main/resources/application.properties
+   ```
+
+3. Edit `src/main/resources/application.properties`:
    ```properties
    # Box Configuration
    box.client.id=your_box_client_id_here
@@ -341,6 +428,52 @@ The tool automatically:
 - Ensure the OAuth scopes are correct in Admin Console
 - Check that user emails in CSV are valid in your domain
 - Verify the service account Client ID matches in Admin Console
+
+### Issue: "Invalid grant: Not a valid email" or "Subject not found"
+
+**Cause**: The service account cannot impersonate the user email
+
+**Solution**:
+1. Verify the user email exists in your Google Workspace domain
+2. Check that domain-wide delegation is properly authorized in Admin Console
+3. Ensure you used the **Client ID** (not email) when authorizing in Admin Console
+4. Wait 5-10 minutes after setting up delegation (Google caches permissions)
+5. Verify both Drive scopes are listed in Admin Console
+
+### Issue: "Credentials not found" or "Service account key invalid"
+
+**Cause**: The JSON key file path is incorrect or the key is invalid
+
+**Solution**:
+1. Use **absolute path** in `google.credentials.file` setting:
+   ```properties
+   # Good
+   google.credentials.file=/Users/yourname/box-migration/credentials.json
+   
+   # Bad (relative paths may not work)
+   google.credentials.file=./credentials.json
+   ```
+2. Verify the JSON file is valid:
+   ```bash
+   cat /path/to/credentials.json | jq .
+   # Should show valid JSON with type: "service_account"
+   ```
+3. Check file permissions:
+   ```bash
+   ls -l /path/to/credentials.json
+   # Should be readable
+   ```
+
+### Issue: "Cannot find service account option in Google Cloud Console"
+
+**Cause**: Wrong section or project not properly set up
+
+**Solution**:
+1. Make sure you're in the correct Google Cloud project
+2. Go to **APIs & Services** → **Credentials** (not IAM & Admin)
+3. Click **+ CREATE CREDENTIALS** at the top
+4. Look for **Service Account** in the dropdown
+5. If using wizard, select **Help me choose** and pick **Application data**
 
 ### Issue: "Java version error"
 
