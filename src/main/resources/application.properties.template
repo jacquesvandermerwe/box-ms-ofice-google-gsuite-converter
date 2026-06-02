@@ -5,8 +5,18 @@ box.developer.token=YOUR_BOX_DEV_TOKEN
 box.enterprise.id=YOUR_ENTERPRISE_ID
 
 # Google Drive Configuration
+# For Google Workspace (service account with domain-wide delegation):
+#   - Set google.auth.type=service_account
+#   - Use service account JSON file
+#   - CSV must have user_email for each file (user to impersonate)
+# For Personal Google Account (OAuth user consent):
+#   - Set google.auth.type=oauth
+#   - Use OAuth client credentials JSON file
+#   - user_email in CSV will be ignored (uploads to authenticated user)
+google.auth.type=service_account
 google.credentials.file=path/to/credentials.json
 google.application.name=Box-Google-Converter
+google.oauth.redirect.uri=http://localhost:8080/oauth2callback
 
 # Database Configuration
 db.path=./migration-results.db

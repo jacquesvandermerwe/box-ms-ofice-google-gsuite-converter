@@ -39,6 +39,18 @@ public class MigrationOrchestrator {
         logger.info("Starting Box to Google Drive Migration");
         logger.info("========================================");
 
+        // Log authentication mode
+        if (driveService.isOAuthMode()) {
+            logger.info("Authentication Mode: OAuth (Personal Google Account)");
+            logger.info("All files will be uploaded to the authenticated user's Google Drive");
+            logger.info("user_email column in CSV will be ignored");
+        } else {
+            logger.info("Authentication Mode: Service Account (Google Workspace)");
+            logger.info("Files will be uploaded to users specified in CSV user_email column");
+            logger.info("Domain-wide delegation must be configured in Admin Console");
+        }
+        logger.info("========================================");
+
         try {
             loadCsvRecords();
 

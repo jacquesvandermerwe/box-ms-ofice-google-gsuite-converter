@@ -102,6 +102,22 @@ public class AppConfig {
         return getProperty("google.application.name", "Box-Google-Converter");
     }
 
+    public String getGoogleAuthType() {
+        return getProperty("google.auth.type", "service_account");
+    }
+
+    public boolean isOAuthMode() {
+        return "oauth".equalsIgnoreCase(getGoogleAuthType());
+    }
+
+    public boolean isServiceAccountMode() {
+        return "service_account".equalsIgnoreCase(getGoogleAuthType());
+    }
+
+    public String getGoogleOAuthRedirectUri() {
+        return getProperty("google.oauth.redirect.uri", "http://localhost:8080/oauth2callback");
+    }
+
     public String getDbPath() {
         return getProperty("db.path", "./migration-results.db");
     }

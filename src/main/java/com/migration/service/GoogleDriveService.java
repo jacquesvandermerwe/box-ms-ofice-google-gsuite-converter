@@ -184,4 +184,8 @@ public class GoogleDriveService {
             throw new IOException("Security error while checking file existence", e);
         }
     }
+
+    public boolean isOAuthMode() {
+        return credentialsManager.isOAuthMode();
+    }
 }
