@@ -263,21 +263,29 @@ Domain-wide delegation must be configured in Admin Console
 
 ### CSV Handling
 
+**Simplified CSV format** - The application automatically fetches file paths and names from Box API:
+
 **OAuth Mode:**
 ```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Report.docx,ignored@example.com  ← Ignored
-987654321,/Sales/Budget.xlsx,anything  ← Ignored
+box_file_id,user_email
+123456789,your.email@gmail.com  ← Ignored, all files → your Drive
+987654321,your.email@gmail.com  ← Ignored
 ```
-All files → Authenticated user's Drive
+All files → Authenticated user's Drive (preserves original Box folder structure)
 
 **Service Account Mode:**
 ```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Report.docx,user1@company.com  ← Impersonates user1
-987654321,/Sales/Budget.xlsx,user2@company.com  ← Impersonates user2
+box_file_id,user_email
+123456789,user1@company.com  ← Impersonates user1
+987654321,user2@company.com  ← Impersonates user2
 ```
-Files → Respective users' Drives
+Files → Respective users' Drives (preserves original Box folder structure)
+
+**Optional**: Include `box_file_path` to override the automatic Box folder structure:
+```csv
+box_file_id,box_file_path,user_email
+123456789,/Custom/Folder,user1@company.com
+```
 
 ---
 

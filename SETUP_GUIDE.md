@@ -271,21 +271,15 @@ thread.pool.size=100
 
 ### 2A.5 Prepare CSV (User Email Ignored in OAuth Mode)
 
-Your CSV can include `user_email`, but it will be **ignored** in OAuth mode - all files go to your Drive:
+Create a simple CSV with just Box file IDs. The application automatically fetches file paths and names from Box:
 
 ```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Report.docx,ignored
-987654321,/Sales/Budget.xlsx,ignored
+box_file_id,user_email
+123456789,your.email@gmail.com
+987654321,your.email@gmail.com
 ```
 
-Or just put your own email for clarity:
-
-```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Report.docx,your.email@gmail.com
-987654321,/Sales/Budget.xlsx,your.email@gmail.com
-```
+*Note: The `user_email` column is required but ignored in OAuth mode - all files go to your authenticated Google Drive account.*
 
 ### 2A.6 First Run - OAuth Consent Flow
 
@@ -490,15 +484,16 @@ thread.pool.size=100
 
 ### 2B.8 Prepare CSV (User Email Required in Service Account Mode)
 
-Your CSV **must** include valid user emails from your Google Workspace domain:
+Create a simple CSV with Box file IDs and target users. The application automatically fetches file paths and names from Box:
 
 ```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Report.docx,user1@yourcompany.com
-987654321,/Sales/Budget.xlsx,user2@yourcompany.com
+box_file_id,user_email
+123456789,user1@yourcompany.com
+987654321,user2@yourcompany.com
+456789123,user3@yourcompany.com
 ```
 
-The application will impersonate each user and upload files to their Google Drive.
+*Note: User emails must be valid in your Google Workspace domain. The application will impersonate each user and upload files to their respective Google Drives.*
 
 ### 2B.9 Verify Domain-Wide Delegation Setup
 
@@ -640,30 +635,47 @@ retry.delay.seconds=5
 
 Create `migration-input.csv` in your project root.
 
+**Simplified CSV format (RECOMMENDED):**
+
+The application automatically retrieves file paths and names from the Box API, so you only need to specify the file IDs and target users:
+
 **For OAuth (Personal Account):**
 ```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Q1/Report.docx,your.email@gmail.com
-987654321,/Sales/Budget.xlsx,your.email@gmail.com
-456789123,/HR/Presentation.pptx,your.email@gmail.com
+box_file_id,user_email
+123456789,your.email@gmail.com
+987654321,your.email@gmail.com
+456789123,your.email@gmail.com
 ```
 *Note: The `user_email` column is ignored in OAuth mode - all files go to your Drive.*
 
 **For Service Account (Google Workspace):**
 ```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Q1/Report.docx,user1@yourcompany.com
-987654321,/Sales/Budget.xlsx,user2@yourcompany.com
-456789123,/HR/Presentation.pptx,user3@yourcompany.com
+box_file_id,user_email
+123456789,user1@yourcompany.com
+987654321,user2@yourcompany.com
+456789123,user3@yourcompany.com
 ```
 *Note: The `user_email` must be valid users in your Google Workspace domain.*
 
+**Legacy format (optional, with explicit paths):**
+
+You can optionally include `box_file_path` if you want to override the automatic path detection:
+
+```csv
+box_file_id,box_file_path,user_email
+123456789,/Marketing/Q1,user1@yourcompany.com
+987654321,/Sales,user2@yourcompany.com
+```
+
 **Column descriptions**:
-- `box_file_id`: The Box file ID (see Step 3)
-- `box_file_path`: The target folder path in Google Drive (e.g., `/Marketing/Q1`)
-- `user_email`: 
+- `box_file_id`: **Required** - The Box file ID (see Step 3)
+- `user_email`: **Required** - Target user email
   - OAuth mode: Ignored (all files → your Drive)
-  - Service Account mode: Target user email (must be in your Workspace domain)
+  - Service Account mode: User to impersonate (must be in your Workspace domain)
+- `box_file_path`: **Optional** - Custom folder path in Google Drive
+  - If omitted, the application fetches the original Box folder path automatically
+  - If provided, files are placed in this folder instead of the Box path
+  - Example: `/Marketing/Q1` or `/Custom/Folder/Path`
 
 ## Step 5: Build the Application
 

@@ -93,23 +93,23 @@ thread.pool.size=100
 
 ### Step 3: Prepare CSV
 
-Your CSV can include `user_email`, but it will be **ignored** in OAuth mode:
+Create a simple CSV with just Box file IDs. The application automatically fetches file paths and names from Box:
+
+```csv
+box_file_id,user_email
+123456789,your.email@gmail.com
+987654321,your.email@gmail.com
+```
+
+*Note: The `user_email` is required but ignored in OAuth mode - all files go to your authenticated Google Drive account regardless of what you put in this column.*
+
+**Optional**: If you want to organize files in custom folders instead of using the original Box folder structure, you can include `box_file_path`:
 
 ```csv
 box_file_id,box_file_path,user_email
-123456789,/Marketing/Report.docx,your.email@gmail.com
-987654321,/Sales/Budget.xlsx,your.email@gmail.com
+123456789,/Custom/Folder,your.email@gmail.com
+987654321,/Another/Path,your.email@gmail.com
 ```
-
-Or you can put any value (or leave blank):
-
-```csv
-box_file_id,box_file_path,user_email
-123456789,/Marketing/Report.docx,ignored
-987654321,/Sales/Budget.xlsx,ignored
-```
-
-All files will go to the authenticated user's Drive (you) regardless.
 
 ### Step 4: First Run - OAuth Consent
 
@@ -274,8 +274,8 @@ Quick test to verify OAuth is working:
 google.auth.type=oauth
 
 # 2. Create a test CSV with 1 file
-echo "box_file_id,box_file_path,user_email" > test.csv
-echo "YOUR_BOX_FILE_ID,/Test,ignored" >> test.csv
+echo "box_file_id,user_email" > test.csv
+echo "YOUR_BOX_FILE_ID,your.email@gmail.com" >> test.csv
 
 # 3. Update csv path
 csv.input.path=./test.csv
@@ -286,7 +286,7 @@ java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
 # Expected output:
 # "Authentication Mode: OAuth (Personal Google Account)"
 # Browser opens for consent
-# File uploads to your Drive
+# File uploads to your Drive in its original Box folder structure
 ```
 
 ## FAQ
