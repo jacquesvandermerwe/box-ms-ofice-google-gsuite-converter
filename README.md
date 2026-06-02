@@ -4,17 +4,33 @@ A Java application for migrating files from Box.com to Google Drive with automat
 
 ## Features
 
+### Core Features
 - **Selective Migration**: Process only specific files defined in CSV input
 - **Format Conversion**: Automatically converts Office files to Google Workspace formats
-  - .docx → Google Docs
-  - .xlsx → Google Sheets
-  - .pptx → Google Slides
-- **Folder Structure Preservation**: Maintains Box folder hierarchy in Google Drive
+  - .docx, .doc → Google Docs
+  - .xlsx, .xls → Google Sheets
+  - .pptx, .ppt → Google Slides
+- **Folder Structure Preservation**: Maintains Box folder hierarchy in Google Drive automatically
 - **🚀 Virtual Threads**: Lightweight, scalable concurrency (100-500+ concurrent migrations)
 - **High Performance**: 10x faster than traditional threading with minimal resource usage
 - **Resume Capability**: SQLite database tracks state, allowing safe restarts
+- **Duplicate Detection**: Prevents re-uploading files that already exist
 - **Comprehensive Reporting**: Detailed logging and database reporting
 - **Error Handling**: Robust error handling with detailed error messages
+
+### Authentication Options
+- **Box Authentication**:
+  - JWT Config (production - auto-refreshing tokens) ✅ Recommended
+  - Developer Token (testing - expires in 60 minutes)
+  - As-User header support for service account impersonation
+- **Google Authentication**:
+  - OAuth 2.0 (personal Google accounts) ✅ No Google Workspace required
+  - Service Account with domain-wide delegation (Google Workspace)
+
+### CSV Flexibility
+- **Simplified format**: Only `box_file_id` and `user_email` required
+- **Automatic path detection**: File paths fetched from Box API (optional in CSV)
+- **Smart duplicate checking**: Strips extensions when checking for converted files
 
 ## Prerequisites
 
@@ -22,66 +38,54 @@ A Java application for migrating files from Box.com to Google Drive with automat
 - Maven 3.6+
 - Box.com account with API access
 - Google Cloud project with Drive API enabled
-- Service account credentials for Google Drive
+- **One of:**
+  - Personal Google account (for OAuth mode - uploads to your Drive)
+  - Google Workspace with admin access (for Service Account mode - multi-user)
 
 > **Note**: Virtual threads require Java 21+. See [VIRTUAL_THREADS.md](VIRTUAL_THREADS.md) for installation and performance details.
 
-## Setup
+## Quick Start
 
-### 1. Box Setup
+**Choose your setup path:**
 
-1. Go to [Box Developer Console](https://app.box.com/developers/console)
-2. Create a new Custom App
-3. Choose **Server Authentication (with JWT)** or use **Developer Token** for testing
-4. Grant the app **Read all files and folders** scope
-5. Note your:
-   - Client ID
-   - Client Secret
-   - Developer Token (for testing)
+- **Personal Google Account?** → See [OAUTH_SETUP.md](OAUTH_SETUP.md) (5 minute setup)
+- **Google Workspace?** → See [SETUP_GUIDE.md](SETUP_GUIDE.md) (full setup guide)
+- **Compare both options?** → See [GOOGLE_CLOUD_SETUP_COMPARISON.md](GOOGLE_CLOUD_SETUP_COMPARISON.md)
 
-### 2. Google Cloud Setup
+## Detailed Setup
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable **Google Drive API**
-4. Create a **Service Account**:
-   - Go to IAM & Admin → Service Accounts
-   - Create Service Account
-   - Download JSON key file
-5. Enable **Domain-Wide Delegation**:
-   - Edit the service account
-   - Check "Enable G Suite Domain-wide Delegation"
-   - Note the Client ID
-6. In Google Workspace Admin Console:
-   - Navigate to Security → API Controls → Domain-wide Delegation
-   - Add new API client with the service account Client ID
-   - Add OAuth Scopes:
-     - `https://www.googleapis.com/auth/drive`
-     - `https://www.googleapis.com/auth/drive.file`
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for comprehensive setup instructions covering:
+- Box JWT authentication and developer tokens
+- Google OAuth (personal accounts) and Service Account (Workspace)
+- Box As-User header configuration
+- CSV format options (simplified vs. full)
+- Troubleshooting common issues
 
-### 3. Configuration
-
-1. Copy `src/main/resources/application.properties` and update:
+### Quick Configuration Example
 
 ```properties
-# Box Configuration
-box.client.id=YOUR_BOX_CLIENT_ID
-box.client.secret=YOUR_BOX_CLIENT_SECRET
-box.developer.token=YOUR_BOX_DEV_TOKEN
-box.enterprise.id=YOUR_ENTERPRISE_ID
+# Box Configuration - Choose ONE:
+box.config.file=/path/to/box_config.json  # JWT (recommended)
+# OR
+box.developer.token=YOUR_TOKEN  # Testing only (expires 60 min)
 
-# Google Drive Configuration (use absolute path)
-google.credentials.file=/path/to/your/service-account-key.json
-google.application.name=Box-Google-Converter
+# Box As-User (optional but often required for JWT)
+box.as.user.id=YOUR_BOX_USER_ID
 
-# Database Configuration
+# Google Drive - OAuth Mode (Personal Account)
+google.auth.type=oauth
+google.credentials.file=/path/to/oauth-credentials.json
+
+# OR Google Drive - Service Account Mode (Workspace)
+# google.auth.type=service_account
+# google.credentials.file=/path/to/service-account-key.json
+
+# Database & CSV
 db.path=./migration-results.db
+csv.input.path=./migration-input.csv
 
-# Threading Configuration (Virtual Threads)
-# Virtual threads are lightweight - can handle 100-500+ concurrent migrations
-# Recommended: 100 for most use cases, 200-500 for large-scale migrations
+# Virtual Threads (lightweight, scalable)
 thread.pool.size=100
-thread.pool.max.size=500
 
 # CSV Input
 csv.input.path=./migration-input.csv
@@ -91,21 +95,27 @@ retry.max.attempts=3
 retry.delay.seconds=5
 ```
 
-### 4. Prepare CSV Input
+### CSV Input Format
 
-Create `migration-input.csv` with the following format:
+**Simplified format (recommended):**
+```csv
+box_file_id,user_email
+123456789,user@example.com
+987654321,user@example.com
+```
 
+The application automatically fetches file paths and names from Box API.
+
+**Legacy format (with explicit paths):**
 ```csv
 box_file_id,box_file_path,user_email
-123456789,/Marketing/Q1/Report.docx,user1@example.com
-987654321,/Sales/Budget.xlsx,user2@example.com
-456789123,/HR/Presentation.pptx,user3@example.com
+123456789,/Marketing/Q1,user@example.com
 ```
 
 **Columns:**
-- `box_file_id`: The Box file ID (found in Box URL or via API)
-- `box_file_path`: The folder path in Box where the file is located
-- `user_email`: The target Google Drive user email (for domain-wide delegation)
+- `box_file_id`: **Required** - The Box file ID (from Box URL or API)
+- `user_email`: **Required** - Target user email (ignored in OAuth mode)
+- `box_file_path`: **Optional** - Custom folder path (auto-detected if omitted)
 
 ## Building
 
