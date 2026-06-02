@@ -1,6 +1,8 @@
 package com.migration.config;
 
 import com.box.sdk.BoxAPIConnection;
+import com.box.sdk.BoxConfig;
+import com.box.sdk.BoxDeveloperEditionAPIConnection;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
@@ -21,8 +23,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 
@@ -61,16 +67,36 @@ public class CredentialsManager {
     private BoxAPIConnection createBoxConnection() {
         logger.info("Initializing Box API connection");
 
-        String developerToken = config.getBoxDeveloperToken();
+        // Option 1: Try JWT config file first (production, auto-refreshing)
+        String configFile = config.getBoxConfigFile();
+        if (configFile != null && !configFile.isEmpty()) {
+            try {
+                logger.info("Using Box JWT authentication from config file: {}", configFile);
+                Reader reader = new FileReader(configFile);
+                BoxConfig boxConfig = BoxConfig.readFrom(reader);
+                BoxDeveloperEditionAPIConnection api = BoxDeveloperEditionAPIConnection.getAppEnterpriseConnection(boxConfig);
+                logger.info("Box JWT authentication successful");
+                return api;
+            } catch (IOException e) {
+                logger.error("Failed to load Box JWT config from file: {}", configFile, e);
+                throw new IllegalStateException("Failed to load Box JWT config file", e);
+            }
+        }
 
+        // Option 2: Fall back to developer token (testing, expires in 60 minutes)
+        String developerToken = config.getBoxDeveloperToken();
         if (developerToken != null && !developerToken.isEmpty() &&
             !developerToken.equals("YOUR_BOX_DEV_TOKEN")) {
             logger.info("Using Box Developer Token authentication");
+            logger.warn("Developer tokens expire after 60 minutes. For production, use box.config.file with JWT authentication.");
             return new BoxAPIConnection(developerToken);
         }
 
-        logger.warn("Box credentials not configured properly. Please set box.developer.token in application.properties");
-        throw new IllegalStateException("Box authentication not configured. Please provide a developer token.");
+        logger.error("Box credentials not configured properly.");
+        logger.error("Set either:");
+        logger.error("  - box.config.file=/path/to/box_config.json (recommended for production)");
+        logger.error("  - box.developer.token=YOUR_TOKEN (for quick testing, expires in 60 min)");
+        throw new IllegalStateException("Box authentication not configured. Please provide either box.config.file or box.developer.token.");
     }
 
     public Drive getGoogleDriveService() throws IOException, GeneralSecurityException {

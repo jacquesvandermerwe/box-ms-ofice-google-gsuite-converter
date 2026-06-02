@@ -26,14 +26,21 @@ public class AppConfig {
     }
 
     private void validateRequiredProperties() {
-        String[] requiredProps = {
-            "box.client.id",
-            "google.credentials.file",
-            "db.path",
-            "csv.input.path",
-            "thread.pool.size"
-        };
+        // Box: Either developer token OR config file must be set
+        boolean hasBoxAuth = (getProperty("box.developer.token") != null && !getProperty("box.developer.token").isEmpty() && !getProperty("box.developer.token").equals("YOUR_BOX_DEV_TOKEN"))
+                          || (getProperty("box.config.file") != null && !getProperty("box.config.file").isEmpty());
 
+        if (!hasBoxAuth) {
+            logger.warn("Box authentication not configured. Set either box.developer.token or box.config.file");
+        }
+
+        // Google: credentials file required
+        if (getProperty("google.credentials.file") == null || getProperty("google.credentials.file").isEmpty()) {
+            logger.warn("Required property 'google.credentials.file' is not set or empty");
+        }
+
+        // Other required properties
+        String[] requiredProps = {"db.path", "csv.input.path", "thread.pool.size"};
         for (String prop : requiredProps) {
             if (getProperty(prop) == null || getProperty(prop).isEmpty()) {
                 logger.warn("Required property '{}' is not set or empty", prop);
@@ -92,6 +99,10 @@ public class AppConfig {
 
     public String getBoxEnterpriseId() {
         return getProperty("box.enterprise.id");
+    }
+
+    public String getBoxConfigFile() {
+        return getProperty("box.config.file");
     }
 
     public String getGoogleCredentialsFile() {

@@ -1,8 +1,17 @@
 # Box Configuration
-box.client.id=YOUR_BOX_CLIENT_ID
-box.client.secret=YOUR_BOX_CLIENT_SECRET
-box.developer.token=YOUR_BOX_DEV_TOKEN
-box.enterprise.id=YOUR_ENTERPRISE_ID
+# Choose ONE of the following authentication methods:
+
+# Option 1: JWT Config File (RECOMMENDED for production)
+# - Download from Box Developer Console → Your App → Configuration → "Generate a Public/Private Keypair"
+# - Auto-refreshing tokens, no manual intervention needed
+# - Supports enterprise and app user authentication
+box.config.file=/absolute/path/to/box_config.json
+
+# Option 2: Developer Token (for quick testing only)
+# - Generate from Box Developer Console → Your App → Configuration → "Developer Token"
+# - Expires after 60 minutes
+# - Good for initial testing, not suitable for production
+# box.developer.token=YOUR_BOX_DEV_TOKEN
 
 # Google Drive Configuration
 # For Google Workspace (service account with domain-wide delegation):

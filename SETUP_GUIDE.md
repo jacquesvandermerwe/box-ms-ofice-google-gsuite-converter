@@ -49,36 +49,103 @@ sudo apt install openjdk-21-jdk
 
 ## Step 1: Box.com Setup
 
+> **Choose ONE authentication method for Box:**
+> - **Option A (Developer Token)**: Quick testing, expires in 60 minutes
+> - **Option B (JWT Config)**: Production use, auto-refreshing tokens ✅ RECOMMENDED
+
 ### Option A: Using Developer Token (Quick Testing)
+
+**Use this for:** Quick testing, proof of concept
+
+⚠️ **Limitations:**
+- Token expires after 60 minutes
+- Must regenerate manually
+- Not suitable for production
+
+**Steps:**
 
 1. Log in to [Box Developer Console](https://app.box.com/developers/console)
 2. Click **Create New App**
 3. Select **Custom App**
-4. Choose **Server Authentication (with JWT)** or **OAuth 2.0 with Client Credentials**
+4. Choose **Server Authentication (with JWT)**
 5. Name your app (e.g., "Box-Google-Migration")
-6. Click **View Your App**
-7. Go to **Configuration** tab
-8. Scroll down to **Developer Token** section
-9. Click **Generate Developer Token**
-10. **Copy the token** (valid for 60 minutes - for testing only)
+6. Click **Create App**
+7. Click **View Your App**
+8. Go to **Configuration** tab
+9. Scroll down to **Developer Token** section
+10. Click **Generate Developer Token**
+11. **Copy the token** (valid for 60 minutes)
+12. Set in `application.properties`:
+    ```properties
+    box.developer.token=YOUR_COPIED_TOKEN_HERE
+    ```
 
-### Option B: Using JWT (Production)
+### Option B: Using JWT Config File (Production) ✅ RECOMMENDED
 
-1. Follow steps 1-6 from Option A
-2. Go to **Configuration** → **Add and Manage Public Keys**
-3. Generate a keypair or upload your public key
-4. Download the JSON config file (contains your private key)
-5. Go to **Authorization** tab
-6. Click **Review and Submit** to request admin approval
-7. Wait for admin approval
+**Use this for:** Production migrations, long-running processes
 
-**Important**: For this tool, we'll use the **Developer Token** approach for simplicity.
+✅ **Benefits:**
+- Tokens auto-refresh (no expiration)
+- More secure than developer tokens
+- Supports enterprise and app users
+- Required for production use
+
+**Steps:**
+
+1. Log in to [Box Developer Console](https://app.box.com/developers/console)
+
+2. If you haven't created an app yet:
+   - Click **Create New App**
+   - Select **Custom App**
+   - Choose **Server Authentication (with JWT)**
+   - Name your app (e.g., "Box-Google-Migration")
+   - Click **Create App**
+
+3. Go to your app's **Configuration** tab
+
+4. Scroll to **Add and Manage Public Keys** section
+
+5. Click **Generate a Public/Private Keypair**
+   - Box will generate a keypair and download `box_config.json`
+   - This file contains your private key - keep it secure!
+
+6. Save the downloaded `box_config.json` file securely (e.g., in a `credentials/` folder)
+
+7. Scroll to **Application Scopes** section and ensure these are checked:
+   - ✅ **Read all files and folders stored in Box**
+   - ✅ **Write all files and folders stored in Box** (optional, for future features)
+
+8. Go to **Authorization** tab
+
+9. Click **Review and Submit**
+   - This requests admin approval for your app
+
+10. Wait for Box admin approval (notification via email)
+
+11. Once approved, set in `application.properties`:
+    ```properties
+    box.config.file=/absolute/path/to/box_config.json
+    ```
+
+**File structure example:**
+```
+box-google-converter/
+├── credentials/
+│   ├── box_config.json              ← Box JWT config
+│   └── oauth-credentials.json       ← Google OAuth credentials
+└── src/
+    └── main/
+        └── resources/
+            └── application.properties
+```
 
 ### Required Box Permissions
 
 In the Box Developer Console, ensure your app has:
-- ✅ **Read all files and folders**
+- ✅ **Read all files and folders** (required)
 - ✅ **Write all files and folders** (optional, for future features)
+- ✅ **Application Scopes** enabled (for JWT)
+- ✅ **Authorized** by Box admin (for JWT)
 
 ## Step 2: Choose Your Authentication Method
 
@@ -504,8 +571,12 @@ box folders:items 0  # 0 = root folder
 
 **For OAuth (Personal Account):**
 ```properties
-# Box Configuration
-box.developer.token=YOUR_DEVELOPER_TOKEN_HERE
+# Box Configuration - Choose ONE:
+# Option 1: JWT Config (recommended for production)
+box.config.file=/absolute/path/to/box_config.json
+
+# Option 2: Developer Token (for quick testing, expires in 60 min)
+# box.developer.token=YOUR_DEVELOPER_TOKEN_HERE
 
 # Google Drive Configuration - OAuth Mode
 google.auth.type=oauth
@@ -528,8 +599,12 @@ retry.delay.seconds=5
 
 **For Service Account (Google Workspace):**
 ```properties
-# Box Configuration
-box.developer.token=YOUR_DEVELOPER_TOKEN_HERE
+# Box Configuration - Choose ONE:
+# Option 1: JWT Config (recommended for production)
+box.config.file=/absolute/path/to/box_config.json
+
+# Option 2: Developer Token (for quick testing, expires in 60 min)
+# box.developer.token=YOUR_DEVELOPER_TOKEN_HERE
 
 # Google Drive Configuration - Service Account Mode
 google.auth.type=service_account
@@ -550,8 +625,13 @@ retry.max.attempts=3
 retry.delay.seconds=5
 ```
 
-4. **Replace placeholders**:
-   - `YOUR_DEVELOPER_TOKEN_HERE`: Your Box developer token (from Step 1)
+4. **Replace placeholders:**
+
+   **Box Configuration (choose one):**
+   - `box.config.file`: Path to Box JWT config JSON (from Step 1 Option B) ✅ RECOMMENDED
+   - OR `box.developer.token`: Your Box developer token (from Step 1 Option A)
+   
+   **Google Configuration:**
    - `google.credentials.file`: 
      - OAuth: Path to `oauth-credentials.json` (from Step 2A.3)
      - Service Account: Path to service account JSON key (from Step 2B.4)

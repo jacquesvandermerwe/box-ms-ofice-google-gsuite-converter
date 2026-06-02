@@ -17,6 +17,8 @@ src/main/resources/application.properties
 credentials.json
 service-account*.json
 oauth-credentials.json
+box_config.json
+box-config.json
 
 # OAuth tokens directory
 tokens/
