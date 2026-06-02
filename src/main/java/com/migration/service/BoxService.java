@@ -44,14 +44,21 @@ public class BoxService {
     }
 
     public BoxFile.Info getFileInfo(String boxFileId) {
-        logger.debug("Retrieving file info from Box: {}", boxFileId);
+        logger.info("Retrieving file info from Box: {}", boxFileId);
+        if (asUserId != null) {
+            logger.info("Acting as Box user: {}", asUserId);
+        } else {
+            logger.warn("No As-User header set - service account acting as itself (may not have file access)");
+        }
         try {
             BoxFile file = new BoxFile(api, boxFileId);
             BoxFile.Info info = file.getInfo("name", "size", "path_collection", "parent", "content_created_at", "content_modified_at");
-            logger.debug("File info retrieved: {}", info.getName());
+            logger.info("File info retrieved successfully: {} (size: {} bytes)", info.getName(), info.getSize());
             return info;
         } catch (BoxAPIException e) {
             logger.error("Failed to retrieve file info from Box: {}", boxFileId, e);
+            logger.error("Box API Response Code: {}", e.getResponseCode());
+            logger.error("Box API Error: {}", e.getMessage());
             throw new RuntimeException("Failed to retrieve file info from Box: " + boxFileId, e);
         }
     }
