@@ -1,0 +1,25 @@
+# Box Configuration
+box.client.id=YOUR_BOX_CLIENT_ID
+box.client.secret=YOUR_BOX_CLIENT_SECRET
+box.developer.token=YOUR_BOX_DEV_TOKEN
+box.enterprise.id=YOUR_ENTERPRISE_ID
+
+# Google Drive Configuration
+google.credentials.file=path/to/credentials.json
+google.application.name=Box-Google-Converter
+
+# Database Configuration
+db.path=./migration-results.db
+
+# Threading Configuration (Virtual Threads)
+# Virtual threads are lightweight - can handle 100-500+ concurrent migrations
+# Recommended: 100 for most use cases, 200-500 for large-scale migrations
+thread.pool.size=100
+thread.pool.max.size=500
+
+# CSV Input
+csv.input.path=./migration-input.csv
+
+# Retry Configuration
+retry.max.attempts=3
+retry.delay.seconds=5

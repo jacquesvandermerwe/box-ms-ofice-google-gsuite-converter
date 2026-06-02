@@ -1,0 +1,4 @@
+box_file_id,box_file_path,user_email
+123456789,/Marketing/Q1/Report.docx,user1@example.com
+987654321,/Sales/Budget.xlsx,user2@example.com
+456789123,/HR/Presentation.pptx,user3@example.com
