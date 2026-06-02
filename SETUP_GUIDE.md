@@ -80,26 +80,54 @@ In the Box Developer Console, ensure your app has:
 - ✅ **Read all files and folders**
 - ✅ **Write all files and folders** (optional, for future features)
 
-## Step 2: Google Cloud & Drive API Setup
+## Step 2: Choose Your Authentication Method
 
-> ⚠️ **IMPORTANT: Check Your Google Account Type First!**
+> ⚠️ **IMPORTANT: Choose Based on Your Google Account Type!**
 >
-> This migration tool is designed for **Google Workspace** (business/education accounts with custom domains like @yourcompany.com).
+> This migration tool supports **two authentication modes**:
 >
-> **If you have a personal Google account (@gmail.com):**
-> - You **CANNOT** use domain-wide delegation
-> - You **CANNOT** access Admin Console or Security settings
-> - You'll see errors like "You need to be part of an organization"
-> 
-> **Your options:**
-> 1. **Personal Account (Single User)**: If migrating files to ONLY your own Google Drive, see [Alternative for Personal Accounts](#alternative-for-personal-accounts-single-user) below
-> 2. **Get Google Workspace**: If migrating to multiple users, you need [Google Workspace](https://workspace.google.com/) (starts at ~$6/user/month)
+> **Option A: OAuth (Personal Google Account)** ✅ RECOMMENDED for individuals
+> - For personal accounts (@gmail.com, @outlook.com, etc.)
+> - Migrates files to **your own** Google Drive only
+> - Browser-based authentication (one-time consent)
+> - **No Google Workspace required**
+> - **Go to: [Setup for Personal Accounts (OAuth)](#step-2a-setup-for-personal-accounts-oauth)**
+>
+> **Option B: Service Account (Google Workspace)** ✅ RECOMMENDED for organizations
+> - For Google Workspace (business accounts with custom domains like @yourcompany.com)
+> - Migrates files to **multiple users'** Google Drives
+> - Requires Admin Console access and domain-wide delegation
+> - **Google Workspace subscription required** (~$6-12/user/month)
+> - **Go to: [Setup for Google Workspace (Service Account)](#step-2b-setup-for-google-workspace-service-account)**
 >
 > **How to tell which you have:**
-> - Personal: Your email is @gmail.com, @outlook.com, etc.
-> - Workspace: Your email is @yourcompany.com (custom domain)
+> - Personal: Your email is @gmail.com, @outlook.com, etc. → Use **Option A (OAuth)**
+> - Workspace: Your email is @yourcompany.com (custom domain) → Use **Option B (Service Account)**
 
-### 2.1 Create Google Cloud Project
+### Quick Comparison
+
+| Feature | OAuth (Personal) | Service Account (Workspace) |
+|---------|------------------|----------------------------|
+| **Account Type** | Personal (@gmail.com) | Google Workspace (custom domain) |
+| **Setup Complexity** | Easy (5 steps) | More complex (9 steps) |
+| **Browser Required** | First run only | Never |
+| **Multiple Users** | ❌ No (only you) | ✅ Yes (any user in domain) |
+| **Admin Console** | ❌ Not needed | ✅ Required |
+| **Domain-Wide Delegation** | ❌ Not needed | ✅ Required |
+| **CSV user_email** | Ignored | Used for impersonation |
+| **Cost** | Free | ~$6-12/user/month |
+| **Google Cloud Setup** | OAuth Client ID | Service Account + Key |
+| **Best For** | Personal migrations | Organization-wide migrations |
+
+---
+
+## Step 2A: Setup for Personal Accounts (OAuth)
+
+> ✅ **Use this section if you have a personal Google account (@gmail.com) and want to migrate files to your own Drive.**
+>
+> This setup uses OAuth 2.0 user consent. You'll grant permission via your browser on first run.
+
+### 2A.1 Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Click on the project dropdown → **New Project**
@@ -107,7 +135,7 @@ In the Box Developer Console, ensure your app has:
 4. Click **Create**
 5. Wait for project creation (1-2 minutes)
 
-### 2.2 Enable Google Drive API
+### 2A.2 Enable Google Drive API
 
 1. In Google Cloud Console, select your new project
 2. Go to **APIs & Services** → **Library**
@@ -115,7 +143,139 @@ In the Box Developer Console, ensure your app has:
 4. Click **Google Drive API**
 5. Click **Enable**
 
-### 2.3 Create Service Account
+### 2A.3 Create OAuth 2.0 Client ID
+
+1. Go to **APIs & Services** → **Credentials**
+
+2. If this is your first time, you'll need to **Configure the OAuth consent screen**:
+   - Click **Configure Consent Screen**
+   - Select **External** (for personal accounts)
+   - Click **Create**
+
+3. Fill in OAuth consent screen (Basic Info):
+   - **App name**: Box-Google-Converter
+   - **User support email**: Your email address
+   - **Developer contact information**: Your email address
+   - Click **Save and Continue**
+
+4. **Scopes** page: Click **Save and Continue** (no need to add scopes manually - the app requests them at runtime)
+
+5. **Test users** page:
+   - Click **+ ADD USERS**
+   - Add your own Gmail address
+   - Click **Save and Continue**
+
+6. Review summary and click **Back to Dashboard**
+
+7. Go back to **Credentials** tab → Click **+ CREATE CREDENTIALS** → **OAuth client ID**
+
+8. Configure OAuth client:
+   - **Application type**: **Desktop app**
+   - **Name**: `Box-Google-Converter OAuth Client`
+   - Click **Create**
+
+9. **Download the JSON file**:
+   - Click the **download icon** next to your newly created OAuth client
+   - Save it as `oauth-credentials.json` in your project root folder
+
+### 2A.4 Configure Application for OAuth Mode
+
+Edit `src/main/resources/application.properties`:
+
+```properties
+# Box Configuration (same as before)
+box.developer.token=YOUR_BOX_DEV_TOKEN
+
+# Google Drive Configuration - OAuth Mode
+google.auth.type=oauth
+google.credentials.file=/absolute/path/to/oauth-credentials.json
+google.application.name=Box-Google-Converter
+
+# CSV Input
+csv.input.path=./migration-input.csv
+
+# Threading Configuration
+thread.pool.size=100
+```
+
+**Key settings for OAuth:**
+- `google.auth.type=oauth` ← This enables OAuth mode
+- `google.credentials.file` should point to your `oauth-credentials.json` (the OAuth client credentials, NOT a service account key)
+
+### 2A.5 Prepare CSV (User Email Ignored in OAuth Mode)
+
+Your CSV can include `user_email`, but it will be **ignored** in OAuth mode - all files go to your Drive:
+
+```csv
+box_file_id,box_file_path,user_email
+123456789,/Marketing/Report.docx,ignored
+987654321,/Sales/Budget.xlsx,ignored
+```
+
+Or just put your own email for clarity:
+
+```csv
+box_file_id,box_file_path,user_email
+123456789,/Marketing/Report.docx,your.email@gmail.com
+987654321,/Sales/Budget.xlsx,your.email@gmail.com
+```
+
+### 2A.6 First Run - OAuth Consent Flow
+
+When you run the application for the first time:
+
+1. Build and run:
+   ```bash
+   mvn clean package
+   java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+   ```
+
+2. **Browser opens automatically** with Google sign-in page
+
+3. Sign in with your Google account
+
+4. You may see "Google hasn't verified this app":
+   - Click **Advanced**
+   - Click **Go to Box-Google-Converter (unsafe)**
+   - This is safe because it's YOUR app
+
+5. Click **Allow** to grant Drive access
+
+6. Browser shows: "The authentication flow has completed. You may close this window."
+
+7. Application continues with migration
+
+**Subsequent runs**: The token is stored in `tokens/` folder, so you won't need to authenticate again unless you revoke access or delete the tokens folder.
+
+✅ **OAuth setup complete!** Skip to [Step 3: Get Box File IDs](#step-3-get-box-file-ids)
+
+For detailed OAuth troubleshooting and additional information, see [OAUTH_SETUP.md](OAUTH_SETUP.md).
+
+---
+
+## Step 2B: Setup for Google Workspace (Service Account)
+
+> ✅ **Use this section if you have Google Workspace and want to migrate files to multiple users' Google Drives.**
+>
+> This setup uses a service account with domain-wide delegation to impersonate users.
+
+### 2B.1 Create Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Click on the project dropdown → **New Project**
+3. Name: "Box-Google-Migration"
+4. Click **Create**
+5. Wait for project creation (1-2 minutes)
+
+### 2B.2 Enable Google Drive API
+
+1. In Google Cloud Console, select your new project
+2. Go to **APIs & Services** → **Library**
+3. Search for "Google Drive API"
+4. Click **Google Drive API**
+5. Click **Enable**
+
+### 2B.3 Create Service Account
 
 **Important**: This migration tool uses a **service account** (not OAuth user login) so it can upload files to multiple users' Google Drives based on the `user_email` in your CSV, without requiring interactive sign-in each time.
 
@@ -154,7 +314,7 @@ In the Box Developer Console, ensure your app has:
 > - Works with domain-wide delegation to impersonate users
 > - "User data" OAuth is for apps where users click "Allow" in browser - not needed here
 
-### 2.4 Create Service Account Key
+### 2B.4 Create Service Account Key
 
 1. Click on the service account you just created
 2. Go to **Keys** tab
@@ -164,7 +324,7 @@ In the Box Developer Console, ensure your app has:
 6. **Save the downloaded JSON file** securely (e.g., `google-credentials.json`)
 7. **Important**: Store this file safely - it contains private keys!
 
-### 2.5 Get Service Account Client ID
+### 2B.5 Get Service Account Client ID
 
 Before you can enable domain-wide delegation, you need to get the service account's Client ID.
 
@@ -188,7 +348,7 @@ Before you can enable domain-wide delegation, you need to get the service accoun
 
 > **Optional**: Some service accounts have a checkbox for "Enable Google Workspace Domain-wide Delegation" on this page. You can check it if you see it, but **the critical step is authorizing in Admin Console** (next section).
 
-### 2.6 Authorize Service Account in Google Workspace Admin Console
+### 2B.6 Authorize Service Account in Google Workspace Admin Console
 
 > ⚠️ **Google Workspace Required**: This step ONLY works with Google Workspace (custom domain). 
 > Personal Google accounts (@gmail.com) cannot access Admin Console.
@@ -237,7 +397,43 @@ Before you can enable domain-wide delegation, you need to get the service accoun
 > - `https://www.googleapis.com/auth/drive.file` - Access to files created/opened by this app
 > - Both are required for this migration tool to work properly
 
-### 2.7 Verify Domain-Wide Delegation Setup
+### 2B.7 Configure Application for Service Account Mode
+
+Edit `src/main/resources/application.properties`:
+
+```properties
+# Box Configuration
+box.developer.token=YOUR_BOX_DEV_TOKEN
+
+# Google Drive Configuration - Service Account Mode
+google.auth.type=service_account
+google.credentials.file=/absolute/path/to/service-account-key.json
+google.application.name=Box-Google-Converter
+
+# CSV Input
+csv.input.path=./migration-input.csv
+
+# Threading Configuration
+thread.pool.size=100
+```
+
+**Key settings for Service Account:**
+- `google.auth.type=service_account` ← This enables Service Account mode (default)
+- `google.credentials.file` should point to your service account JSON key (from Step 2B.4)
+
+### 2B.8 Prepare CSV (User Email Required in Service Account Mode)
+
+Your CSV **must** include valid user emails from your Google Workspace domain:
+
+```csv
+box_file_id,box_file_path,user_email
+123456789,/Marketing/Report.docx,user1@yourcompany.com
+987654321,/Sales/Budget.xlsx,user2@yourcompany.com
+```
+
+The application will impersonate each user and upload files to their Google Drive.
+
+### 2B.9 Verify Domain-Wide Delegation Setup
 
 Before proceeding, verify your setup:
 
@@ -246,6 +442,7 @@ Before proceeding, verify your setup:
 3. ✅ Domain-wide delegation enabled on the service account
 4. ✅ Client ID authorized in Google Workspace Admin Console with both Drive scopes
 5. ✅ You have the service account email and Client ID noted down
+6. ✅ `google.auth.type=service_account` set in application.properties
 
 **Test Checklist**:
 - [ ] Can you see the service account in Google Cloud Console → IAM & Admin → Service Accounts?
@@ -253,98 +450,7 @@ Before proceeding, verify your setup:
 - [ ] Is the Client ID listed in Admin Console → Security → API Controls → Domain-wide Delegation?
 - [ ] Are both Drive scopes listed next to the Client ID?
 
----
-
-## Alternative for Personal Accounts (Single User)
-
-> **Use this section if:**
-> - You have a personal Google account (@gmail.com)
-> - You're migrating files to ONLY your own Google Drive
-> - You see "You need to be part of an organization" errors
-> - You don't have Google Workspace
-
-### Limitations
-
-❌ **Cannot use this tool as-is** - The current code requires service account with domain-wide delegation  
-❌ **Cannot migrate to multiple users** - Only your own Drive  
-✅ **CAN migrate to your own Drive** - With code modifications  
-
-### Option 1: Use OAuth User Consent (Requires Code Changes)
-
-**This requires modifying the application code** to use OAuth 2.0 user consent instead of service accounts.
-
-**Changes needed:**
-1. Create OAuth 2.0 Client ID (not service account) in Google Cloud Console
-2. Modify `CredentialsManager.java` to use OAuth flow with user consent
-3. Add browser-based authentication flow
-4. Store refresh tokens for your account
-5. Remove domain-wide delegation and user impersonation code
-
-**Complexity**: Medium - requires Java development knowledge
-
-### Option 2: Manual Google Drive Upload (No Code Needed)
-
-Since you're uploading to your own Drive, you can:
-1. Download files from Box manually or via Box API
-2. Upload to Google Drive via web interface or Drive API
-3. Convert using Google Drive's built-in conversion (File → Open with → Google Docs)
-
-### Option 3: Get Google Workspace (Recommended for Multiple Users)
-
-If you need to migrate files for multiple users:
-- Sign up for [Google Workspace](https://workspace.google.com/)
-- Individual plan: ~$6/month per user
-- Business plan: ~$12/month per user
-- Includes custom domain (e.g., @yourname.com)
-- Gives you Admin Console access
-- Follow the regular setup guide (Steps 2.1-2.7)
-
-### Option 4: Use a Different Migration Tool
-
-Some migration tools support OAuth for personal accounts:
-- [Google Takeout](https://takeout.google.com/) - For exporting your own data
-- Commercial migration services (Mover.io, CloudHQ, etc.)
-- These may have built-in OAuth support for personal accounts
-
-### Which Option Should You Choose?
-
-| Scenario | Best Option |
-|----------|-------------|
-| Just you, comfortable coding | Option 1 (OAuth modification) |
-| Just you, no coding | Option 2 (Manual upload) |
-| Multiple users | Option 3 (Get Workspace) |
-| Quick & easy | Option 4 (Different tool) |
-
-### Need Help with OAuth Modification?
-
-If you want to modify this tool for OAuth user consent (Option 1), the key changes are:
-
-1. **Replace service account with OAuth client:**
-```java
-// Instead of service account credentials
-GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-    HTTP_TRANSPORT, JSON_FACTORY,
-    clientId, clientSecret,
-    Collections.singleton(DriveScopes.DRIVE))
-    .setAccessType("offline")
-    .build();
-```
-
-2. **Add user consent flow:**
-- User clicks a link in browser
-- Grants permission to the app
-- App receives authorization code
-- Exchanges code for tokens
-- Uses refresh token for future access
-
-3. **Remove user impersonation:**
-- All files go to the authenticated user's Drive
-- Remove `user_email` column requirement from CSV
-- Simplify `GoogleDriveService` to not use delegation
-
-**This is outside the scope of this setup guide, but the concepts are documented in:**
-- [Google OAuth 2.0 for Web Server Applications](https://developers.google.com/identity/protocols/oauth2/web-server)
-- [Google Drive API Quickstart](https://developers.google.com/drive/api/quickstart/java)
+✅ **Service Account setup complete!** Continue to [Step 3: Get Box File IDs](#step-3-get-box-file-ids)
 
 ---
 
@@ -394,54 +500,90 @@ box folders:items 0  # 0 = root folder
       src/main/resources/application.properties
    ```
 
-3. Edit `src/main/resources/application.properties`:
-   ```properties
-   # Box Configuration
-   box.client.id=your_box_client_id_here
-   box.client.secret=your_box_client_secret_here
-   box.developer.token=YOUR_DEVELOPER_TOKEN_HERE
-   box.enterprise.id=your_enterprise_id_here
-   
-   # Google Drive Configuration
-   google.credentials.file=/absolute/path/to/google-credentials.json
-   google.application.name=Box-Google-Converter
-   
-   # Database Configuration
-   db.path=./migration-results.db
-   
-   # Threading Configuration (Virtual Threads)
-   # Virtual threads are lightweight - can handle 100-500+ concurrent migrations
-   # Recommended: 100 for most use cases, 200-500 for large-scale migrations
-   thread.pool.size=100
-   thread.pool.max.size=500
-   
-   # CSV Input
-   csv.input.path=./migration-input.csv
-   
-   # Retry Configuration
-   retry.max.attempts=3
-   retry.delay.seconds=5
-   ```
+3. Edit `src/main/resources/application.properties` based on your authentication mode:
 
-3. **Replace placeholders**:
+**For OAuth (Personal Account):**
+```properties
+# Box Configuration
+box.developer.token=YOUR_DEVELOPER_TOKEN_HERE
+
+# Google Drive Configuration - OAuth Mode
+google.auth.type=oauth
+google.credentials.file=/absolute/path/to/oauth-credentials.json
+google.application.name=Box-Google-Converter
+
+# Database Configuration
+db.path=./migration-results.db
+
+# Threading Configuration (Virtual Threads)
+thread.pool.size=100
+
+# CSV Input
+csv.input.path=./migration-input.csv
+
+# Retry Configuration
+retry.max.attempts=3
+retry.delay.seconds=5
+```
+
+**For Service Account (Google Workspace):**
+```properties
+# Box Configuration
+box.developer.token=YOUR_DEVELOPER_TOKEN_HERE
+
+# Google Drive Configuration - Service Account Mode
+google.auth.type=service_account
+google.credentials.file=/absolute/path/to/service-account-key.json
+google.application.name=Box-Google-Converter
+
+# Database Configuration
+db.path=./migration-results.db
+
+# Threading Configuration (Virtual Threads)
+thread.pool.size=100
+
+# CSV Input
+csv.input.path=./migration-input.csv
+
+# Retry Configuration
+retry.max.attempts=3
+retry.delay.seconds=5
+```
+
+4. **Replace placeholders**:
    - `YOUR_DEVELOPER_TOKEN_HERE`: Your Box developer token (from Step 1)
-   - `/absolute/path/to/google-credentials.json`: Full path to your service account JSON file (from Step 2.4)
+   - `google.credentials.file`: 
+     - OAuth: Path to `oauth-credentials.json` (from Step 2A.3)
+     - Service Account: Path to service account JSON key (from Step 2B.4)
 
 ### 4.2 Create Migration CSV File
 
-Create `migration-input.csv` in your project root:
+Create `migration-input.csv` in your project root.
 
+**For OAuth (Personal Account):**
+```csv
+box_file_id,box_file_path,user_email
+123456789,/Marketing/Q1/Report.docx,your.email@gmail.com
+987654321,/Sales/Budget.xlsx,your.email@gmail.com
+456789123,/HR/Presentation.pptx,your.email@gmail.com
+```
+*Note: The `user_email` column is ignored in OAuth mode - all files go to your Drive.*
+
+**For Service Account (Google Workspace):**
 ```csv
 box_file_id,box_file_path,user_email
 123456789,/Marketing/Q1/Report.docx,user1@yourcompany.com
 987654321,/Sales/Budget.xlsx,user2@yourcompany.com
 456789123,/HR/Presentation.pptx,user3@yourcompany.com
 ```
+*Note: The `user_email` must be valid users in your Google Workspace domain.*
 
 **Column descriptions**:
 - `box_file_id`: The Box file ID (see Step 3)
 - `box_file_path`: The target folder path in Google Drive (e.g., `/Marketing/Q1`)
-- `user_email`: The target Google Workspace user email (must be in your domain)
+- `user_email`: 
+  - OAuth mode: Ignored (all files → your Drive)
+  - Service Account mode: Target user email (must be in your Workspace domain)
 
 ## Step 5: Build the Application
 
@@ -469,12 +611,22 @@ java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
 
 ### Monitor Progress
 
-Watch the console output:
+Watch the console output. The application will show which authentication mode it's using:
+
+**OAuth Mode:**
 ```
-2026-06-02 16:30:00 [main] INFO  com.migration.Main - Box to Google Drive Migration Tool - Starting...
-2026-06-02 16:30:01 [main] INFO  com.migration.Main - Loading configuration...
-2026-06-02 16:30:02 [main] INFO  com.migration.service.MigrationOrchestrator - Starting Box to Google Drive Migration
-...
+2026-06-02 16:30:00 [main] INFO  - Starting Box to Google Drive Migration
+2026-06-02 16:30:00 [main] INFO  - Authentication Mode: OAuth (Personal Google Account)
+2026-06-02 16:30:00 [main] INFO  - All files will be uploaded to the authenticated user's Google Drive
+2026-06-02 16:30:00 [main] INFO  - user_email column in CSV will be ignored
+```
+
+**Service Account Mode:**
+```
+2026-06-02 16:30:00 [main] INFO  - Starting Box to Google Drive Migration
+2026-06-02 16:30:00 [main] INFO  - Authentication Mode: Service Account (Google Workspace)
+2026-06-02 16:30:00 [main] INFO  - Files will be uploaded to users specified in CSV user_email column
+2026-06-02 16:30:00 [main] INFO  - Domain-wide delegation must be configured in Admin Console
 ```
 
 ### Check Logs
@@ -537,42 +689,15 @@ The tool automatically:
 
 **Cause**: You're using a **personal Google account** (@gmail.com), not Google Workspace
 
-**What this means**:
-- Personal Google accounts cannot access Admin Console
-- Personal accounts cannot use domain-wide delegation
-- This migration tool is designed for Google Workspace (business accounts)
+**Solution**: Use **OAuth mode** instead of Service Account mode!
 
-**Solutions**:
+1. Go back to [Step 2A: Setup for Personal Accounts (OAuth)](#step-2a-setup-for-personal-accounts-oauth)
+2. Create OAuth 2.0 Client ID (not Service Account)
+3. Set `google.auth.type=oauth` in `application.properties`
+4. Download `oauth-credentials.json` and configure the path
+5. Run the application - browser will open for consent on first run
 
-**Option A - Single User Migration (Your Own Drive Only)**:
-- See [Alternative for Personal Accounts](#alternative-for-personal-accounts-single-user)
-- Requires code modifications for OAuth user consent
-- OR use manual upload methods
-
-**Option B - Get Google Workspace**:
-1. Sign up for [Google Workspace](https://workspace.google.com/)
-2. Choose Individual (~$6/mo) or Business (~$12/mo) plan
-3. Set up custom domain (e.g., @yourname.com)
-4. Once activated, you'll have Admin Console access
-5. Follow regular setup steps (2.1-2.7)
-
-**Option C - Use Different Tool**:
-- Commercial migration services (Mover.io, CloudHQ, etc.)
-- These tools may support personal Google accounts
-- Usually charge per GB or per file migrated
-
-**How to tell which account type you have**:
-```bash
-# Personal account examples:
-yourname@gmail.com
-yourname@outlook.com
-
-# Google Workspace examples:
-yourname@company.com
-yourname@yourname.com (custom domain)
-```
-
-> **Bottom line**: This tool requires **Google Workspace** for multi-user migrations with domain-wide delegation.
+**Note**: OAuth mode uploads files to **your own** Google Drive only. If you need to migrate to multiple users, you need Google Workspace.
 
 ### Issue: "Box credentials not configured properly"
 
