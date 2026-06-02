@@ -29,8 +29,8 @@ public class MigrationRepository {
             CREATE TABLE IF NOT EXISTS migration_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 box_file_id TEXT NOT NULL UNIQUE,
-                box_file_path TEXT NOT NULL,
-                box_file_name TEXT NOT NULL,
+                box_file_path TEXT,
+                box_file_name TEXT,
                 user_email TEXT NOT NULL,
                 google_drive_file_id TEXT,
                 google_drive_path TEXT,
