@@ -144,51 +144,74 @@ In the Box Developer Console, ensure your app has:
 6. **Save the downloaded JSON file** securely (e.g., `google-credentials.json`)
 7. **Important**: Store this file safely - it contains private keys!
 
-### 2.5 Enable Domain-Wide Delegation
+### 2.5 Get Service Account Client ID
 
-Domain-wide delegation allows the service account to act on behalf of any user in your Google Workspace domain.
+Before you can enable domain-wide delegation, you need to get the service account's Client ID.
 
-1. Go back to **APIs & Services** → **Credentials**
-2. Find your service account in the **Service Accounts** section
-3. Click on the service account email (e.g., `box-migration-service@your-project.iam.gserviceaccount.com`)
-4. Click the **Details** tab
-5. Scroll down to **Domain-wide delegation** section
-6. Check the box: **Enable Google Workspace Domain-wide Delegation**
-7. **Copy the Client ID** (numeric, looks like: `1234567890123456789`)
-   - You'll need this in the next step
-   - This is **different** from the service account email
+**Official Google Documentation**: [Delegating domain-wide authority](https://developers.google.com/identity/protocols/oauth2/service-account#delegatingauthority)
 
-> **Troubleshooting**: If you don't see "Domain-wide delegation", make sure:
-> - You're viewing the service account details page (not the credentials list)
-> - You have Google Workspace admin privileges
-> - Your Google Cloud project is associated with a Workspace domain
+1. Go to [**Service accounts** page](https://console.developers.google.com/iam-admin/serviceaccounts) in Google Cloud Console
+   - Or navigate: **IAM & Admin** → **Service Accounts**
+2. In the list, click on the **email address** of your service account
+   - (e.g., `box-migration-service@your-project.iam.gserviceaccount.com`)
+3. Look at the service account details page
+4. Find and **copy the Client ID** (numeric value)
+   - It looks like: `123456789012345678901`
+   - This is **NOT** the email address
+   - You'll need this for the next step
 
-### 2.6 Authorize in Google Workspace Admin Console
+> **Important Notes**:
+> - The Client ID is a **numeric string** (usually 21 digits)
+> - Do NOT use the service account email address for delegation
+> - Using the email will cause an `unauthorized_client` error
+> - Keep this Client ID handy - you'll paste it into Admin Console next
 
-**This is the critical step** that allows the service account to upload files to users' Google Drives.
+> **Optional**: Some service accounts have a checkbox for "Enable Google Workspace Domain-wide Delegation" on this page. You can check it if you see it, but **the critical step is authorizing in Admin Console** (next section).
+
+### 2.6 Authorize Service Account in Google Workspace Admin Console
+
+**This is the critical step** that allows the service account to impersonate users and upload files to their Google Drives.
+
+> **Requirement**: You must be a **Super Administrator** of your Google Workspace domain to complete this step.
+
+#### Steps to Authorize Domain-Wide Delegation
 
 1. Log in to [Google Admin Console](https://admin.google.com/) as a **Super Admin**
-2. Navigate to **Security** → **Access and data control** → **API Controls**
-3. Scroll down to the **Domain-wide Delegation** section
-4. Click **Add new** (or **Manage Domain-Wide Delegation** → **Add new**)
-5. Fill in the form:
-   - **Client ID**: Paste the numeric Client ID from step 2.5 (e.g., `1234567890123456789`)
-     - ⚠️ **Do NOT use the service account email** - use the Client ID number
-   - **OAuth Scopes**: Add **both** of these scopes (comma-separated or one per line):
-     ```
-     https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.file
-     ```
-6. Click **Authorize**
-7. Verify the entry appears in the Domain-wide Delegation list
 
-> **Common Issues**:
-> - **"Invalid Client ID"**: Make sure you copied the numeric Client ID, not the email
-> - **Can't find API Controls**: You must be a Super Admin in Google Workspace
-> - **Wrong navigation path**: Google Admin UI changes - search for "Domain-wide Delegation" if menu differs
-> 
+2. Navigate to: **Main menu** → **Security** → **Access and data control** → **API Controls**
+
+3. In the **Domain wide delegation** pane, click **Manage Domain Wide Delegation**
+
+4. Click **Add new**
+
+5. Fill in the authorization form:
+
+   **Client ID field**:
+   - Paste the **numeric Client ID** from step 2.5
+   - Example: `123456789012345678901`
+   - ⚠️ **Do NOT use the service account email address**
+   - Using the email will cause `unauthorized_client` error
+   
+   **OAuth scopes (comma-delimited) field**:
+   - Enter both of these scopes, separated by a comma:
+   ```
+   https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.file
+   ```
+   - You can also use spaces: `https://www.googleapis.com/auth/drive, https://www.googleapis.com/auth/drive.file`
+
+6. Click **Authorize**
+
+7. Verify the entry appears in the **Domain wide delegation** list with your Client ID
+
+> **Important**: According to Google documentation:
+> - "It usually takes a few minutes for impersonation access to be granted"
+> - "In some cases, it might take up to **24 hours**"
+> - Wait at least **5-10 minutes** before testing the migration
+
 > **What These Scopes Mean**:
-> - `drive`: Full access to read/write files (needed for creating folders and uploading)
-> - `drive.file`: Access to files created by this app (additional permission for file operations)
+> - `https://www.googleapis.com/auth/drive` - Full Drive access (create folders, upload files)
+> - `https://www.googleapis.com/auth/drive.file` - Access to files created/opened by this app
+> - Both are required for this migration tool to work properly
 
 ### 2.7 Verify Domain-Wide Delegation Setup
 
@@ -436,9 +459,15 @@ The tool automatically:
 **Solution**:
 1. Verify the user email exists in your Google Workspace domain
 2. Check that domain-wide delegation is properly authorized in Admin Console
-3. Ensure you used the **Client ID** (not email) when authorizing in Admin Console
-4. Wait 5-10 minutes after setting up delegation (Google caches permissions)
-5. Verify both Drive scopes are listed in Admin Console
+3. Ensure you used the **numeric Client ID** (not email) when authorizing in Admin Console
+4. **Wait for propagation**: Google states this can take:
+   - Usually: A few minutes
+   - Sometimes: **Up to 24 hours**
+   - Recommendation: Wait at least 10-15 minutes, then retry
+5. Verify both Drive scopes are listed in Admin Console:
+   - `https://www.googleapis.com/auth/drive`
+   - `https://www.googleapis.com/auth/drive.file`
+6. Check the service account Client ID in Admin Console matches the one from IAM & Admin → Service Accounts
 
 ### Issue: "Credentials not found" or "Service account key invalid"
 
@@ -474,6 +503,19 @@ The tool automatically:
 3. Click **+ CREATE CREDENTIALS** at the top
 4. Look for **Service Account** in the dropdown
 5. If using wizard, select **Help me choose** and pick **Application data**
+
+### Additional Resources
+
+**Official Google Documentation**:
+- [Service Account Domain-Wide Delegation](https://developers.google.com/identity/protocols/oauth2/service-account#delegatingauthority)
+- [Google Drive API Scopes](https://developers.google.com/identity/protocols/oauth2/scopes#drive)
+- [Service Account Credentials](https://cloud.google.com/iam/docs/service-account-creds)
+
+**Key Points from Google**:
+- Always use the **numeric Client ID** for domain-wide delegation (not the email)
+- Propagation can take up to 24 hours (usually much faster)
+- You must be a Super Administrator to authorize delegation
+- The service account only accesses what the impersonated user can access
 
 ### Issue: "Java version error"
 
