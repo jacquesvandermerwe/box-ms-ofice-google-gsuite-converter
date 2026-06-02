@@ -8,11 +8,12 @@ This guide will walk you through setting up and running the Box to Google Drive 
 
 **Most common setup problems and solutions:**
 
-1. **"Security error while uploading"** → Domain-wide delegation not authorized in Admin Console
-2. **"Invalid Client ID"** → Used service account email instead of numeric Client ID
-3. **"Subject not found"** → User email not in your Workspace domain or delegation not propagated
-4. **"Application data vs User data"** → Always choose "Application data" for service account
-5. **Can't find delegation settings** → Must be Super Admin in Google Workspace Admin Console
+1. **"You need to be part of an organization"** → You have a personal Google account, not Google Workspace. See [Alternative for Personal Accounts](#alternative-for-personal-accounts-single-user)
+2. **"Security error while uploading"** → Domain-wide delegation not authorized in Admin Console
+3. **"Invalid Client ID"** → Used service account email instead of numeric Client ID
+4. **"Subject not found"** → User email not in your Workspace domain or delegation not propagated
+5. **"Application data vs User data"** → Always choose "Application data" for service account
+6. **Can't find Admin Console** → Personal accounts don't have Admin Console - need Google Workspace
 
 See the [Troubleshooting](#troubleshooting) section for detailed solutions.
 
@@ -22,6 +23,8 @@ See the [Troubleshooting](#troubleshooting) section for detailed solutions.
 - **Maven**: Maven 3.6+ (for building from source)
 - **Box.com**: Account with API access
 - **Google Workspace**: Domain with admin access for service account setup
+  - ⚠️ **Google Workspace (paid) REQUIRED** - Personal Google accounts (@gmail.com) cannot use domain-wide delegation
+  - See [Alternative for Personal Accounts](#alternative-for-personal-accounts-single-user) if you have a personal account
 
 > **Note**: This application uses Java 21 virtual threads for high-performance, lightweight concurrency. See [VIRTUAL_THREADS.md](VIRTUAL_THREADS.md) for details.
 
@@ -78,6 +81,23 @@ In the Box Developer Console, ensure your app has:
 - ✅ **Write all files and folders** (optional, for future features)
 
 ## Step 2: Google Cloud & Drive API Setup
+
+> ⚠️ **IMPORTANT: Check Your Google Account Type First!**
+>
+> This migration tool is designed for **Google Workspace** (business/education accounts with custom domains like @yourcompany.com).
+>
+> **If you have a personal Google account (@gmail.com):**
+> - You **CANNOT** use domain-wide delegation
+> - You **CANNOT** access Admin Console or Security settings
+> - You'll see errors like "You need to be part of an organization"
+> 
+> **Your options:**
+> 1. **Personal Account (Single User)**: If migrating files to ONLY your own Google Drive, see [Alternative for Personal Accounts](#alternative-for-personal-accounts-single-user) below
+> 2. **Get Google Workspace**: If migrating to multiple users, you need [Google Workspace](https://workspace.google.com/) (starts at ~$6/user/month)
+>
+> **How to tell which you have:**
+> - Personal: Your email is @gmail.com, @outlook.com, etc.
+> - Workspace: Your email is @yourcompany.com (custom domain)
 
 ### 2.1 Create Google Cloud Project
 
@@ -170,6 +190,10 @@ Before you can enable domain-wide delegation, you need to get the service accoun
 
 ### 2.6 Authorize Service Account in Google Workspace Admin Console
 
+> ⚠️ **Google Workspace Required**: This step ONLY works with Google Workspace (custom domain). 
+> Personal Google accounts (@gmail.com) cannot access Admin Console.
+> See [Alternative for Personal Accounts](#alternative-for-personal-accounts-single-user) if you have a personal account.
+
 **This is the critical step** that allows the service account to impersonate users and upload files to their Google Drives.
 
 > **Requirement**: You must be a **Super Administrator** of your Google Workspace domain to complete this step.
@@ -228,6 +252,101 @@ Before proceeding, verify your setup:
 - [ ] Does the service account have domain-wide delegation enabled (check Details tab)?
 - [ ] Is the Client ID listed in Admin Console → Security → API Controls → Domain-wide Delegation?
 - [ ] Are both Drive scopes listed next to the Client ID?
+
+---
+
+## Alternative for Personal Accounts (Single User)
+
+> **Use this section if:**
+> - You have a personal Google account (@gmail.com)
+> - You're migrating files to ONLY your own Google Drive
+> - You see "You need to be part of an organization" errors
+> - You don't have Google Workspace
+
+### Limitations
+
+❌ **Cannot use this tool as-is** - The current code requires service account with domain-wide delegation  
+❌ **Cannot migrate to multiple users** - Only your own Drive  
+✅ **CAN migrate to your own Drive** - With code modifications  
+
+### Option 1: Use OAuth User Consent (Requires Code Changes)
+
+**This requires modifying the application code** to use OAuth 2.0 user consent instead of service accounts.
+
+**Changes needed:**
+1. Create OAuth 2.0 Client ID (not service account) in Google Cloud Console
+2. Modify `CredentialsManager.java` to use OAuth flow with user consent
+3. Add browser-based authentication flow
+4. Store refresh tokens for your account
+5. Remove domain-wide delegation and user impersonation code
+
+**Complexity**: Medium - requires Java development knowledge
+
+### Option 2: Manual Google Drive Upload (No Code Needed)
+
+Since you're uploading to your own Drive, you can:
+1. Download files from Box manually or via Box API
+2. Upload to Google Drive via web interface or Drive API
+3. Convert using Google Drive's built-in conversion (File → Open with → Google Docs)
+
+### Option 3: Get Google Workspace (Recommended for Multiple Users)
+
+If you need to migrate files for multiple users:
+- Sign up for [Google Workspace](https://workspace.google.com/)
+- Individual plan: ~$6/month per user
+- Business plan: ~$12/month per user
+- Includes custom domain (e.g., @yourname.com)
+- Gives you Admin Console access
+- Follow the regular setup guide (Steps 2.1-2.7)
+
+### Option 4: Use a Different Migration Tool
+
+Some migration tools support OAuth for personal accounts:
+- [Google Takeout](https://takeout.google.com/) - For exporting your own data
+- Commercial migration services (Mover.io, CloudHQ, etc.)
+- These may have built-in OAuth support for personal accounts
+
+### Which Option Should You Choose?
+
+| Scenario | Best Option |
+|----------|-------------|
+| Just you, comfortable coding | Option 1 (OAuth modification) |
+| Just you, no coding | Option 2 (Manual upload) |
+| Multiple users | Option 3 (Get Workspace) |
+| Quick & easy | Option 4 (Different tool) |
+
+### Need Help with OAuth Modification?
+
+If you want to modify this tool for OAuth user consent (Option 1), the key changes are:
+
+1. **Replace service account with OAuth client:**
+```java
+// Instead of service account credentials
+GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+    HTTP_TRANSPORT, JSON_FACTORY,
+    clientId, clientSecret,
+    Collections.singleton(DriveScopes.DRIVE))
+    .setAccessType("offline")
+    .build();
+```
+
+2. **Add user consent flow:**
+- User clicks a link in browser
+- Grants permission to the app
+- App receives authorization code
+- Exchanges code for tokens
+- Uses refresh token for future access
+
+3. **Remove user impersonation:**
+- All files go to the authenticated user's Drive
+- Remove `user_email` column requirement from CSV
+- Simplify `GoogleDriveService` to not use delegation
+
+**This is outside the scope of this setup guide, but the concepts are documented in:**
+- [Google OAuth 2.0 for Web Server Applications](https://developers.google.com/identity/protocols/oauth2/web-server)
+- [Google Drive API Quickstart](https://developers.google.com/drive/api/quickstart/java)
+
+---
 
 ## Step 3: Get Box File IDs
 
@@ -413,6 +532,47 @@ The tool automatically:
 - Maintains all previous state
 
 ## Troubleshooting
+
+### Issue: "You need to be part of an organization" or "Security Command Centre" message
+
+**Cause**: You're using a **personal Google account** (@gmail.com), not Google Workspace
+
+**What this means**:
+- Personal Google accounts cannot access Admin Console
+- Personal accounts cannot use domain-wide delegation
+- This migration tool is designed for Google Workspace (business accounts)
+
+**Solutions**:
+
+**Option A - Single User Migration (Your Own Drive Only)**:
+- See [Alternative for Personal Accounts](#alternative-for-personal-accounts-single-user)
+- Requires code modifications for OAuth user consent
+- OR use manual upload methods
+
+**Option B - Get Google Workspace**:
+1. Sign up for [Google Workspace](https://workspace.google.com/)
+2. Choose Individual (~$6/mo) or Business (~$12/mo) plan
+3. Set up custom domain (e.g., @yourname.com)
+4. Once activated, you'll have Admin Console access
+5. Follow regular setup steps (2.1-2.7)
+
+**Option C - Use Different Tool**:
+- Commercial migration services (Mover.io, CloudHQ, etc.)
+- These tools may support personal Google accounts
+- Usually charge per GB or per file migrated
+
+**How to tell which account type you have**:
+```bash
+# Personal account examples:
+yourname@gmail.com
+yourname@outlook.com
+
+# Google Workspace examples:
+yourname@company.com
+yourname@yourname.com (custom domain)
+```
+
+> **Bottom line**: This tool requires **Google Workspace** for multi-user migrations with domain-wide delegation.
 
 ### Issue: "Box credentials not configured properly"
 
