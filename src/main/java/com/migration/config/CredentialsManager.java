@@ -42,6 +42,7 @@ public class CredentialsManager {
     private ServiceAccountCredentials serviceAccountCredentials;
     private Credential oauthCredential;
     private final NetHttpTransport httpTransport;
+    private Drive cachedOAuthDriveService; // Cache for OAuth mode (single user)
 
     public CredentialsManager(AppConfig config) throws GeneralSecurityException, IOException {
         this.config = config;
@@ -114,17 +115,24 @@ public class CredentialsManager {
     /**
      * OAuth mode - for personal Google accounts
      * User email is ignored; all files go to the authenticated user's Drive
+     * Drive service is cached since OAuth mode only uses one user
      */
     private Drive getOAuthDriveService(String userEmail) throws IOException {
         if (userEmail != null && !userEmail.isEmpty()) {
             logger.debug("OAuth mode: Ignoring user_email '{}' - uploading to authenticated user's Drive", userEmail);
         }
 
-        logger.info("Creating Google Drive service using OAuth credentials");
+        // Cache Drive service in OAuth mode since we only have one user
+        if (cachedOAuthDriveService == null) {
+            logger.info("Creating Google Drive service using OAuth credentials");
+            cachedOAuthDriveService = new Drive.Builder(httpTransport, JSON_FACTORY, oauthCredential)
+                    .setApplicationName(config.getGoogleApplicationName())
+                    .build();
+        } else {
+            logger.debug("Reusing cached OAuth Drive service");
+        }
 
-        return new Drive.Builder(httpTransport, JSON_FACTORY, oauthCredential)
-                .setApplicationName(config.getGoogleApplicationName())
-                .build();
+        return cachedOAuthDriveService;
     }
 
     /**
