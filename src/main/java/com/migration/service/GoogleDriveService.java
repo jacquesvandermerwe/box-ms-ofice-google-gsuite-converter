@@ -155,13 +155,15 @@ public class GoogleDriveService {
     }
 
     public boolean fileExistsAtPath(String fileName, String folderId, String userEmail) throws IOException {
-        logger.debug("Checking if file exists: {} in folder: {}", fileName, folderId);
+        logger.info("Checking if file exists: '{}' in folder: {}", fileName, folderId);
 
         try {
             Drive driveService = credentialsManager.getGoogleDriveServiceForUser(userEmail);
 
             String query = String.format("name='%s' and '%s' in parents and trashed=false",
                     fileName.replace("'", "\\'"), folderId);
+
+            logger.info("Google Drive query: {}", query);
 
             FileList result = driveService.files().list()
                     .setQ(query)
@@ -174,7 +176,9 @@ public class GoogleDriveService {
             boolean exists = files != null && !files.isEmpty();
 
             if (exists) {
-                logger.info("File already exists at destination: {}", fileName);
+                logger.warn("File already exists at destination: {} (ID: {})", fileName, files.get(0).getId());
+            } else {
+                logger.info("File does not exist at destination: {}", fileName);
             }
 
             return exists;
@@ -183,5 +187,9 @@ public class GoogleDriveService {
             logger.error("Security error while checking file existence: {}", fileName, e);
             throw new IOException("Security error while checking file existence", e);
         }
+    }
+
+    public boolean isOAuthMode() {
+        return credentialsManager.isOAuthMode();
     }
 }

@@ -33,10 +33,21 @@ public class CsvReader {
             for (CSVRecord csvRecord : csvParser) {
                 try {
                     String boxFileId = csvRecord.get("box_file_id");
-                    String boxFilePath = csvRecord.get("box_file_path");
                     String userEmail = csvRecord.get("user_email");
 
-                    String boxFileName = extractFileName(boxFilePath);
+                    // box_file_path is optional - if not provided, it will be fetched from Box API
+                    String boxFilePath = null;
+                    String boxFileName = null;
+
+                    try {
+                        boxFilePath = csvRecord.get("box_file_path");
+                        if (boxFilePath != null && !boxFilePath.isEmpty()) {
+                            boxFileName = extractFileName(boxFilePath);
+                        }
+                    } catch (IllegalArgumentException e) {
+                        // box_file_path column doesn't exist - will be fetched from Box API
+                        logger.debug("box_file_path not provided in CSV for file {}, will fetch from Box API", boxFileId);
+                    }
 
                     MigrationRecord record = new MigrationRecord(boxFileId, boxFilePath, boxFileName, userEmail);
                     records.add(record);

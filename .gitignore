@@ -16,6 +16,13 @@ src/main/resources/application.properties
 *.json
 credentials.json
 service-account*.json
+oauth-credentials.json
+box_config.json
+box-config.json
+
+# OAuth tokens directory
+tokens/
+StoredCredential
 
 # CSV files with actual data
 migration-input.csv

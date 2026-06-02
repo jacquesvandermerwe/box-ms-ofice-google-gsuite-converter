@@ -55,9 +55,13 @@ public class MigrationTaskProcessor implements Callable<MigrationRecord> {
 
             String folderId = driveService.ensureFolderPath(record.getBoxFilePath(), record.getUserEmail());
 
-            if (driveService.fileExistsAtPath(record.getBoxFileName(), folderId, record.getUserEmail())) {
+            // Check for existing file - use converted name (without Office extension) for duplicate detection
+            String fileNameToCheck = getConvertedFileName(record.getBoxFileName());
+            logger.info("Checking for duplicates: original='{}', converted='{}'", record.getBoxFileName(), fileNameToCheck);
+
+            if (driveService.fileExistsAtPath(fileNameToCheck, folderId, record.getUserEmail())) {
                 throw new FileAlreadyExistsException(
-                        "File already exists at destination: " + record.getBoxFilePath() + "/" + record.getBoxFileName());
+                        "File already exists at destination: " + record.getBoxFilePath() + "/" + fileNameToCheck);
             }
 
             repository.updateStatus(record.getBoxFileId(), MigrationStatus.UPLOADING, null);
@@ -101,6 +105,27 @@ public class MigrationTaskProcessor implements Callable<MigrationRecord> {
             repository.insertOrUpdateRecord(record);
             return record;
         }
+    }
+
+    /**
+     * Get the converted file name (without Office extension) for duplicate checking.
+     * Google Workspace files don't have extensions: "Report.docx" becomes "Report"
+     */
+    private String getConvertedFileName(String fileName) {
+        if (fileName == null || !fileName.contains(".")) {
+            return fileName;
+        }
+
+        String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
+
+        // Strip extension for Office files that will be converted to Google format
+        if (extension.equals("docx") || extension.equals("xlsx") || extension.equals("pptx") ||
+            extension.equals("doc") || extension.equals("xls") || extension.equals("ppt")) {
+            return fileName.substring(0, fileName.lastIndexOf('.'));
+        }
+
+        // Keep extension for other file types
+        return fileName;
     }
 
     private String getMimeTypeFromFileName(String fileName) {

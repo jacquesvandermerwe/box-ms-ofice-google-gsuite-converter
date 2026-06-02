@@ -27,7 +27,7 @@ public class Main {
             repository.initialize();
 
             logger.info("Initializing services...");
-            BoxService boxService = new BoxService(boxApi);
+            BoxService boxService = new BoxService(boxApi, config.getBoxAsUserId());
             GoogleDriveService googleDriveService = new GoogleDriveService(credentialsManager);
             ConversionService conversionService = new ConversionService(credentialsManager);
 

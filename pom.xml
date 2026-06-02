@@ -49,6 +49,13 @@
             <version>${google.auth.version}</version>
         </dependency>
 
+        <!-- Google OAuth Client (for personal account OAuth flow) -->
+        <dependency>
+            <groupId>com.google.oauth-client</groupId>
+            <artifactId>google-oauth-client-jetty</artifactId>
+            <version>1.35.0</version>
+        </dependency>
+
         <!-- SQLite JDBC Driver -->
         <dependency>
             <groupId>org.xerial</groupId>

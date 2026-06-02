@@ -1,12 +1,40 @@
 # Box Configuration
-box.client.id=YOUR_BOX_CLIENT_ID
-box.client.secret=YOUR_BOX_CLIENT_SECRET
-box.developer.token=YOUR_BOX_DEV_TOKEN
-box.enterprise.id=YOUR_ENTERPRISE_ID
+# Choose ONE of the following authentication methods:
+
+# Option 1: JWT Config File (RECOMMENDED for production)
+# - Download from Box Developer Console → Your App → Configuration → "Generate a Public/Private Keypair"
+# - Auto-refreshing tokens, no manual intervention needed
+# - Supports enterprise and app user authentication
+box.config.file=/absolute/path/to/box_config.json
+
+# Option 2: Developer Token (for quick testing only)
+# - Generate from Box Developer Console → Your App → Configuration → "Developer Token"
+# - Expires after 60 minutes
+# - Good for initial testing, not suitable for production
+# box.developer.token=YOUR_BOX_DEV_TOKEN
+
+# Box As-User Header (optional but often required)
+# When using JWT/service account, you typically need to specify which Box user to act as
+# The service account itself has no files - it must impersonate a user to access their content
+# Find your Box user ID:
+#   Method 1: Go to https://app.box.com/master/settings and look at the URL
+#   Method 2: Use Box API to list users: https://developer.box.com/reference/get-users/
+#   Method 3: Box CLI: box users:get YOUR_EMAIL
+# box.as.user.id=YOUR_BOX_USER_ID
 
 # Google Drive Configuration
+# For Google Workspace (service account with domain-wide delegation):
+#   - Set google.auth.type=service_account
+#   - Use service account JSON file
+#   - CSV must have user_email for each file (user to impersonate)
+# For Personal Google Account (OAuth user consent):
+#   - Set google.auth.type=oauth
+#   - Use OAuth client credentials JSON file
+#   - user_email in CSV will be ignored (uploads to authenticated user)
+google.auth.type=service_account
 google.credentials.file=path/to/credentials.json
 google.application.name=Box-Google-Converter
+google.oauth.redirect.uri=http://localhost:8080/oauth2callback
 
 # Database Configuration
 db.path=./migration-results.db
