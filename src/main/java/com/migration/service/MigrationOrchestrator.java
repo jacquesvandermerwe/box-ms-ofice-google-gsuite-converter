@@ -36,19 +36,21 @@ public class MigrationOrchestrator {
 
     public void startMigration() {
         logger.info("========================================");
-        logger.info("Starting Box to Google Drive Migration");
+        logger.info("Starting Box Office-to-Decoupled-Docs Migration");
         logger.info("========================================");
 
         // Log authentication mode
         if (driveService.isOAuthMode()) {
             logger.info("Authentication Mode: OAuth (Personal Google Account)");
-            logger.info("All files will be uploaded to the authenticated user's Google Drive");
-            logger.info("user_email column in CSV will be ignored");
+            logger.info("Google conversion uses the authenticated user's Drive (temporary)");
+            logger.info("user_email column in CSV will be ignored for Google auth");
         } else {
             logger.info("Authentication Mode: Service Account (Google Workspace)");
-            logger.info("Files will be uploaded to users specified in CSV user_email column");
+            logger.info("Google conversion impersonates CSV user_email (or google.impersonate.user default)");
             logger.info("Domain-wide delegation must be configured in Admin Console");
+            logger.info("CSV user_email must be a real @yourdomain.com address — not 'ignored'");
         }
+        logger.info("Decoupled exports (.gdoc/.gsheet/.gslides) replace the source Box file as a new version");
         logger.info("========================================");
 
         try {
@@ -60,6 +62,10 @@ public class MigrationOrchestrator {
             if (recordsToProcess.isEmpty()) {
                 logger.info("No records to process. Migration complete.");
                 return;
+            }
+
+            if (!driveService.isOAuthMode()) {
+                driveService.validateServiceAccountImpersonation(recordsToProcess.get(0).getUserEmail());
             }
 
             int maxConcurrency = config.getThreadPoolSize();
@@ -88,8 +94,8 @@ public class MigrationOrchestrator {
 
                     if (result.getStatus() == MigrationStatus.COMPLETED) {
                         completed++;
-                        logger.info("✓ Successfully migrated: {} -> {}",
-                                   result.getBoxFileId(), result.getGoogleDriveFileId());
+                        logger.info("✓ Successfully migrated: {}",
+                                   result.getBoxFileId());
                     } else {
                         failed++;
                         logger.error("✗ Failed to migrate: {} - {}",
@@ -171,7 +177,7 @@ public class MigrationOrchestrator {
 
         if (total > 0) {
             double successRate = (completed * 100.0) / total;
-            logger.info("Success Rate:      {:.2f}%", successRate);
+            logger.info("Success Rate:      {}%", String.format("%.2f", successRate));
         }
 
         logger.info("========================================");

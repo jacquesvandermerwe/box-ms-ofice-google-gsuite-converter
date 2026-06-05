@@ -133,6 +133,11 @@ public class AppConfig {
         return getProperty("google.oauth.redirect.uri", "http://localhost:8080/oauth2callback");
     }
 
+    /** Default Workspace user to impersonate when CSV user_email is blank or "ignored". */
+    public String getGoogleImpersonateUser() {
+        return getProperty("google.impersonate.user");
+    }
+
     public String getDbPath() {
         return getProperty("db.path", "./migration-results.db");
     }

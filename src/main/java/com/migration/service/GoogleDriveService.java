@@ -1,7 +1,10 @@
 package com.migration.service;
 
+import com.google.api.client.http.GenericUrl;
+import com.google.api.client.http.HttpResponse;
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.services.drive.Drive;
+import com.migration.model.FileConversionMapping;
 import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
 import com.migration.config.CredentialsManager;
@@ -10,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.*;
 
@@ -191,5 +195,84 @@ public class GoogleDriveService {
 
     public boolean isOAuthMode() {
         return credentialsManager.isOAuthMode();
+    }
+
+    public void validateServiceAccountImpersonation(String userEmail) {
+        if (credentialsManager.isServiceAccountMode()) {
+            credentialsManager.resolveImpersonatedUser(userEmail);
+        }
+    }
+
+    /**
+     * Export a native Google Workspace file to decoupled format via the beta exportGDoc API.
+     * GET https://www.googleapis.com/drive/v2beta/files/{fileId}/exportGDoc?mimeType=...
+     */
+    public byte[] exportDecoupledDocument(String googleFileId, String googleMimeType, String userEmail)
+            throws IOException {
+        String decoupledMimeType = FileConversionMapping.getDecoupledMimeType(googleMimeType);
+        if (decoupledMimeType == null) {
+            throw new IllegalArgumentException("No decoupled export MIME type for: " + googleMimeType);
+        }
+
+        logger.info("Exporting decoupled document via exportGDoc: {} ({})", googleFileId, decoupledMimeType);
+
+        try {
+            Drive driveService = credentialsManager.getGoogleDriveServiceForUser(userEmail);
+            GenericUrl url = new GenericUrl(
+                    "https://www.googleapis.com/drive/v2beta/files/" + googleFileId + "/exportGDoc");
+            url.set("mimeType", decoupledMimeType);
+
+            IOException lastError = null;
+            for (int attempt = 1; attempt <= 3; attempt++) {
+                HttpResponse response = null;
+                try {
+                    response = driveService.getRequestFactory().buildGetRequest(url).execute();
+                    int status = response.getStatusCode();
+                    InputStream body = response.getContent();
+                    byte[] bytes = body != null ? body.readAllBytes() : new byte[0];
+
+                    if (status == 200) {
+                        logger.info("Decoupled export succeeded: {} bytes", bytes.length);
+                        return bytes;
+                    }
+
+                    String errorBody = new String(bytes, StandardCharsets.UTF_8);
+                    IOException error = new IOException(
+                            "exportGDoc failed with HTTP " + status + ": " + errorBody);
+
+                    if (status == 500 || status == 503) {
+                        lastError = error;
+                        logger.warn("exportGDoc attempt {}/3 failed with retryable status {}", attempt, status);
+                        Thread.sleep(5000L * attempt);
+                        continue;
+                    }
+                    throw error;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("exportGDoc interrupted", e);
+                } finally {
+                    if (response != null) {
+                        response.disconnect();
+                    }
+                }
+            }
+
+            throw lastError != null ? lastError : new IOException("exportGDoc failed after retries");
+
+        } catch (GeneralSecurityException e) {
+            logger.error("Security error during decoupled export: {}", googleFileId, e);
+            throw new IOException("Security error during decoupled export", e);
+        }
+    }
+
+    public void deleteFile(String googleFileId, String userEmail) throws IOException {
+        logger.info("Deleting temporary Google Drive file: {}", googleFileId);
+        try {
+            Drive driveService = credentialsManager.getGoogleDriveServiceForUser(userEmail);
+            driveService.files().delete(googleFileId).execute();
+        } catch (GeneralSecurityException e) {
+            logger.error("Security error while deleting file: {}", googleFileId, e);
+            throw new IOException("Security error while deleting file", e);
+        }
     }
 }

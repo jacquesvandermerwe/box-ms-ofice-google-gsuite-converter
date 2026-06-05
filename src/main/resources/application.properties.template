@@ -35,6 +35,8 @@ google.auth.type=service_account
 google.credentials.file=path/to/credentials.json
 google.application.name=Box-Google-Converter
 google.oauth.redirect.uri=http://localhost:8080/oauth2callback
+# Default Workspace user when CSV user_email is "ignored" (service account mode only)
+# google.impersonate.user=user@yourdomain.com
 
 # Database Configuration
 db.path=./migration-results.db

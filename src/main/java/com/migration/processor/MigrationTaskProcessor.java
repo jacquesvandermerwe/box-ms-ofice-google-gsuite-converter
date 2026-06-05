@@ -2,6 +2,7 @@ package com.migration.processor;
 
 import com.box.sdk.BoxFile;
 import com.migration.model.ConversionResult;
+import com.migration.model.FileConversionMapping;
 import com.migration.model.MigrationRecord;
 import com.migration.model.MigrationStatus;
 import com.migration.repository.MigrationRepository;
@@ -11,6 +12,7 @@ import com.migration.service.GoogleDriveService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.sql.Timestamp;
 import java.util.concurrent.Callable;
@@ -53,41 +55,63 @@ public class MigrationTaskProcessor implements Callable<MigrationRecord> {
             logger.info("Downloading file from Box: {} ({})", fileInfo.getName(), fileInfo.getSize());
             InputStream fileContent = boxService.downloadFile(record.getBoxFileId());
 
-            String folderId = driveService.ensureFolderPath(record.getBoxFilePath(), record.getUserEmail());
+            String mimeType = getMimeTypeFromFileName(record.getBoxFileName());
+            String decoupledFileName = FileConversionMapping.getDecoupledFileName(record.getBoxFileName(), mimeType);
 
-            // Check for existing file - use converted name (without Office extension) for duplicate detection
-            String fileNameToCheck = getConvertedFileName(record.getBoxFileName());
-            logger.info("Checking for duplicates: original='{}', converted='{}'", record.getBoxFileName(), fileNameToCheck);
-
-            if (driveService.fileExistsAtPath(fileNameToCheck, folderId, record.getUserEmail())) {
+            if (decoupledFileName.equals(record.getBoxFileName())) {
                 throw new FileAlreadyExistsException(
-                        "File already exists at destination: " + record.getBoxFilePath() + "/" + fileNameToCheck);
+                        "File already appears to be in decoupled format: " + record.getBoxFileName());
             }
 
-            repository.updateStatus(record.getBoxFileId(), MigrationStatus.UPLOADING, null);
-
-            String mimeType = getMimeTypeFromFileName(record.getBoxFileName());
+            String driveFolderId = driveService.ensureFolderPath(record.getBoxFilePath(), record.getUserEmail());
 
             repository.updateStatus(record.getBoxFileId(), MigrationStatus.CONVERTING, null);
             ConversionResult result = conversionService.uploadAndConvert(
                     fileContent,
                     record.getBoxFileName(),
                     mimeType,
-                    folderId,
+                    driveFolderId,
                     record.getUserEmail()
             );
 
             record.setGoogleDriveFileId(result.getFileId());
             record.setGoogleDrivePath(record.getBoxFilePath());
             record.setGoogleDriveWebViewLink(result.getWebViewLink());
-            record.setConvertedFormat(getFormatFromMimeType(result.getMimeType()));
+
+            try {
+                repository.updateStatus(record.getBoxFileId(), MigrationStatus.EXPORTING, null);
+                byte[] decoupledContent = driveService.exportDecoupledDocument(
+                        result.getFileId(),
+                        result.getMimeType(),
+                        record.getUserEmail()
+                );
+
+                repository.updateStatus(record.getBoxFileId(), MigrationStatus.UPLOADING, null);
+                BoxFile.Info updatedFile = boxService.uploadNewVersionWithName(
+                        record.getBoxFileId(),
+                        new ByteArrayInputStream(decoupledContent),
+                        decoupledFileName
+                );
+
+                record.setBoxFileName(updatedFile.getName());
+                record.setFileSizeBytes(updatedFile.getSize());
+
+                driveService.deleteFile(result.getFileId(), record.getUserEmail());
+                record.setGoogleDriveFileId(null);
+            } catch (Exception exportError) {
+                logger.warn("Decoupled export/upload failed; temporary Google file retained: {}",
+                        result.getFileId(), exportError);
+                throw exportError;
+            }
+
+            record.setConvertedFormat(getDecoupledFormatLabel(result.getMimeType()));
             record.setStatus(MigrationStatus.COMPLETED);
             record.setCompletedAt(new Timestamp(System.currentTimeMillis()));
 
             repository.insertOrUpdateRecord(record);
 
-            logger.info("Migration completed successfully for Box file: {} -> Google Drive file: {}",
-                       record.getBoxFileId(), record.getGoogleDriveFileId());
+            logger.info("Migration completed successfully for Box file: {} -> new version as '{}'",
+                       record.getBoxFileId(), record.getBoxFileName());
 
             return record;
 
@@ -107,27 +131,6 @@ public class MigrationTaskProcessor implements Callable<MigrationRecord> {
         }
     }
 
-    /**
-     * Get the converted file name (without Office extension) for duplicate checking.
-     * Google Workspace files don't have extensions: "Report.docx" becomes "Report"
-     */
-    private String getConvertedFileName(String fileName) {
-        if (fileName == null || !fileName.contains(".")) {
-            return fileName;
-        }
-
-        String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
-
-        // Strip extension for Office files that will be converted to Google format
-        if (extension.equals("docx") || extension.equals("xlsx") || extension.equals("pptx") ||
-            extension.equals("doc") || extension.equals("xls") || extension.equals("ppt")) {
-            return fileName.substring(0, fileName.lastIndexOf('.'));
-        }
-
-        // Keep extension for other file types
-        return fileName;
-    }
-
     private String getMimeTypeFromFileName(String fileName) {
         String extension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
 
@@ -143,20 +146,16 @@ public class MigrationTaskProcessor implements Callable<MigrationRecord> {
         }
     }
 
-    private String getFormatFromMimeType(String mimeType) {
-        if (mimeType == null) {
+    private String getDecoupledFormatLabel(String googleMimeType) {
+        if (googleMimeType == null) {
             return "unknown";
         }
 
-        if (mimeType.equals("application/vnd.google-apps.document")) {
-            return "Google Docs";
-        } else if (mimeType.equals("application/vnd.google-apps.spreadsheet")) {
-            return "Google Sheets";
-        } else if (mimeType.equals("application/vnd.google-apps.presentation")) {
-            return "Google Slides";
+        String extension = FileConversionMapping.getDecoupledExtension(googleMimeType);
+        if (extension != null) {
+            return "decoupled ." + extension;
         }
-
-        return mimeType;
+        return googleMimeType;
     }
 
     public static class FileAlreadyExistsException extends Exception {

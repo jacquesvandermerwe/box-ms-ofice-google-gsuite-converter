@@ -4,6 +4,7 @@ import com.box.sdk.BoxAPIConnection;
 import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
+import com.box.sdk.BoxItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,6 +95,55 @@ public class BoxService {
         String fullPath = path.toString();
         logger.debug("File path: {}", fullPath);
         return fullPath;
+    }
+
+    public String getParentFolderId(BoxFile.Info fileInfo) {
+        if (fileInfo.getParent() == null) {
+            return "0";
+        }
+        return fileInfo.getParent().getID();
+    }
+
+    public boolean fileExistsInFolder(String folderId, String fileName) {
+        logger.debug("Checking if file exists in Box folder {}: {}", folderId, fileName);
+        try {
+            BoxFolder folder = new BoxFolder(api, folderId);
+            for (BoxItem.Info child : folder.getChildren("name")) {
+                if (fileName.equals(child.getName())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (BoxAPIException e) {
+            logger.error("Error checking file existence in Box folder {}: {}", folderId, fileName, e);
+            throw new RuntimeException("Error checking file existence in folder: " + folderId, e);
+        }
+    }
+
+    public BoxFile.Info uploadFile(InputStream content, String fileName, String folderId) {
+        logger.info("Uploading file to Box folder {}: {}", folderId, fileName);
+        try {
+            BoxFolder folder = new BoxFolder(api, folderId);
+            return folder.uploadFile(content, fileName);
+        } catch (BoxAPIException e) {
+            logger.error("Failed to upload file to Box: {} in folder {}", fileName, folderId, e);
+            throw new RuntimeException("Failed to upload file to Box: " + fileName, e);
+        }
+    }
+
+    /**
+     * Uploads decoupled content as a new version of an existing Box file and renames it.
+     * Previous file versions remain available in Box version history.
+     */
+    public BoxFile.Info uploadNewVersionWithName(String boxFileId, InputStream content, String newFileName) {
+        logger.info("Uploading new Box version for file {} as '{}'", boxFileId, newFileName);
+        try {
+            BoxFile file = new BoxFile(api, boxFileId);
+            return file.uploadNewVersion(content, null, null, newFileName);
+        } catch (BoxAPIException e) {
+            logger.error("Failed to upload new version to Box file {}: {}", boxFileId, newFileName, e);
+            throw new RuntimeException("Failed to upload new version to Box file: " + boxFileId, e);
+        }
     }
 
     public boolean fileExists(String boxFileId) {

@@ -6,6 +6,7 @@ public enum MigrationStatus {
     DOWNLOADING,
     UPLOADING,
     CONVERTING,
+    EXPORTING,
     COMPLETED,
     FAILED
 }

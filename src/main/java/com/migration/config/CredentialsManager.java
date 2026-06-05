@@ -140,21 +140,47 @@ public class CredentialsManager {
      * Impersonates the specified user email
      */
     private Drive getServiceAccountDriveService(String userEmail) throws IOException, GeneralSecurityException {
-        logger.info("Creating Google Drive service for user: {}",
-                   userEmail != null ? userEmail : "default service account");
+        String impersonatedUser = resolveImpersonatedUser(userEmail);
+        logger.info("Creating Google Drive service impersonating: {}", impersonatedUser);
 
-        GoogleCredentials credentials;
-        if (userEmail != null && !userEmail.isEmpty()) {
-            // Impersonate the user (requires domain-wide delegation)
-            credentials = serviceAccountCredentials.createDelegated(userEmail);
-            logger.debug("Impersonating user: {}", userEmail);
-        } else {
-            credentials = serviceAccountCredentials;
-        }
+        GoogleCredentials credentials = serviceAccountCredentials.createDelegated(impersonatedUser);
 
         return new Drive.Builder(httpTransport, JSON_FACTORY, new HttpCredentialsAdapter(credentials))
                 .setApplicationName(config.getGoogleApplicationName())
                 .build();
+    }
+
+    public String resolveImpersonatedUser(String userEmail) {
+        String email = userEmail != null ? userEmail.trim() : "";
+        if (email.isEmpty() || isIgnoredUserEmailPlaceholder(email)) {
+            String defaultUser = config.getGoogleImpersonateUser();
+            if (defaultUser != null && !defaultUser.trim().isEmpty()) {
+                email = defaultUser.trim();
+                logger.debug("Using google.impersonate.user default: {}", email);
+            }
+        }
+
+        if (email.isEmpty() || isIgnoredUserEmailPlaceholder(email)) {
+            throw new IllegalStateException(
+                "Service account mode requires a Google Workspace user to impersonate. "
+                    + "Replace 'ignored' in CSV user_email with a real @yourdomain.com address, "
+                    + "or set google.impersonate.user in application.properties.");
+        }
+
+        if (!email.contains("@") || email.startsWith("@") || email.endsWith("@")) {
+            throw new IllegalStateException(
+                "Invalid user_email for service account impersonation: '" + email + "'. "
+                    + "Use a full Google Workspace address (e.g. user@company.com).");
+        }
+
+        return email;
+    }
+
+    private static boolean isIgnoredUserEmailPlaceholder(String value) {
+        return "ignored".equalsIgnoreCase(value)
+                || "n/a".equalsIgnoreCase(value)
+                || "na".equalsIgnoreCase(value)
+                || "-".equals(value);
     }
 
     /**
@@ -172,16 +198,23 @@ public class CredentialsManager {
 
         logger.info("Loading OAuth client credentials from: {}", credentialsPath);
 
+        if (isServiceAccountKeyFile(credentialsPath)) {
+            throw new IllegalStateException(
+                "Credentials file is a service account key, but google.auth.type=oauth. "
+                    + "Set google.auth.type=service_account, or point google.credentials.file "
+                    + "at an OAuth 2.0 Desktop client JSON (with an 'installed' section).");
+        }
+
         // Load client secrets
         GoogleClientSecrets clientSecrets;
         try (FileInputStream in = new FileInputStream(credentialsPath)) {
             clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
         }
 
-        // Check that it's an OAuth client (not service account)
-        if (clientSecrets.getDetails().getClientId() == null) {
+        if (clientSecrets.getDetails() == null || clientSecrets.getDetails().getClientId() == null) {
             throw new IllegalStateException(
-                "Credentials file appears to be a service account. For OAuth mode, use OAuth 2.0 Client ID credentials.");
+                "Credentials file is not a valid OAuth client JSON. "
+                    + "Download an OAuth 2.0 Desktop client from Google Cloud Console → Credentials.");
         }
 
         // Build flow and trigger user authorization
@@ -217,6 +250,13 @@ public class CredentialsManager {
 
         logger.info("Loading Google service account credentials from: {}", credentialsPath);
 
+        if (!isServiceAccountKeyFile(credentialsPath)) {
+            throw new IllegalStateException(
+                "Credentials file is not a service account key, but google.auth.type=service_account. "
+                    + "Set google.auth.type=oauth for a Desktop OAuth client JSON, or use a "
+                    + "service account key JSON (with \"type\": \"service_account\").");
+        }
+
         try (FileInputStream serviceAccountStream = new FileInputStream(credentialsPath)) {
             GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccountStream)
                     .createScoped(Collections.singleton(DriveScopes.DRIVE));
@@ -239,5 +279,26 @@ public class CredentialsManager {
 
     public boolean isServiceAccountMode() {
         return config.isServiceAccountMode();
+    }
+
+    /**
+     * Returns a valid Google OAuth access token (refreshes if expired).
+     * OAuth mode only — uses the client JSON + stored refresh token in tokens/.
+     */
+    private boolean isServiceAccountKeyFile(String credentialsPath) throws IOException {
+        String content = Files.readString(Paths.get(credentialsPath));
+        return content.contains("\"type\"") && content.contains("service_account");
+    }
+
+    public String getGoogleAccessToken() throws IOException {
+        if (!config.isOAuthMode()) {
+            throw new IllegalStateException(
+                "getGoogleAccessToken() requires google.auth.type=oauth");
+        }
+        Long expiresIn = oauthCredential.getExpiresInSeconds();
+        if (expiresIn == null || expiresIn <= 60) {
+            oauthCredential.refreshToken();
+        }
+        return oauthCredential.getAccessToken();
     }
 }
