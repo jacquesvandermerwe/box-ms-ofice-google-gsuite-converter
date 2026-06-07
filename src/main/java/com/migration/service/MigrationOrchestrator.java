@@ -13,12 +13,10 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
-import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 public class MigrationOrchestrator {
@@ -28,19 +26,16 @@ public class MigrationOrchestrator {
     private final MigrationRepository repository;
     private final AppConfig config;
     private final JobLauncher jobLauncher;
-    private final JobOperator jobOperator;
     private final Job migrationJob;
 
     private volatile JobExecution currentExecution;
 
     public MigrationOrchestrator(GoogleDriveService driveService, MigrationRepository repository,
-                                AppConfig config, JobLauncher jobLauncher, JobOperator jobOperator,
-                                Job migrationJob) {
+                                AppConfig config, JobLauncher jobLauncher, Job migrationJob) {
         this.driveService = driveService;
         this.repository = repository;
         this.config = config;
         this.jobLauncher = jobLauncher;
-        this.jobOperator = jobOperator;
         this.migrationJob = migrationJob;
     }
 
@@ -64,7 +59,10 @@ public class MigrationOrchestrator {
         logger.info("========================================");
 
         try {
-            loadCsvRecords();
+            List<MigrationRecord> pendingCheck = repository.getPendingRecords();
+            if (pendingCheck.isEmpty()) {
+                loadCsvRecords();
+            }
 
             List<MigrationRecord> recordsToProcess = repository.getPendingRecords();
             logger.info("Found {} records to process (PENDING or FAILED)", recordsToProcess.size());
@@ -102,15 +100,10 @@ public class MigrationOrchestrator {
             return false;
         }
 
-        try {
-            logger.info("Stopping migration job (execution ID: {})", execution.getId());
-            jobOperator.stop(execution.getId());
-            logger.info("Stop signal sent. Job will stop after current chunk completes.");
-            return true;
-        } catch (Exception e) {
-            logger.error("Failed to stop migration job", e);
-            return false;
-        }
+        logger.info("Stopping migration job (execution ID: {})", execution.getId());
+        execution.setStatus(BatchStatus.STOPPING);
+        logger.info("Stop signal sent. Job will stop after current chunk completes.");
+        return true;
     }
 
     public boolean isRunning() {
