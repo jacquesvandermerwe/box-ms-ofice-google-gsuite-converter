@@ -2,38 +2,70 @@ package com.migration.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-@Component
-@ConfigurationProperties
+@ConfigurationProperties(prefix = "")
 public class AppConfig {
     private static final Logger logger = LoggerFactory.getLogger(AppConfig.class);
-    
+
     private Properties properties; // For manual loading compatibility
 
+    @Value("${box.client.id:}")
     private String boxClientId;
+
+    @Value("${box.client.secret:}")
     private String boxClientSecret;
+
+    @Value("${box.developer.token:}")
     private String boxDeveloperToken;
+
+    @Value("${box.enterprise.id:}")
     private String boxEnterpriseId;
+
+    @Value("${box.config.file:}")
     private String boxConfigFile;
+
+    @Value("${box.as.user.id:}")
     private String boxAsUserId;
+
+    @Value("${google.credentials.file:}")
     private String googleCredentialsFile;
-    private String googleApplicationName = "Box-Google-Converter";
-    private String googleAuthType = "service_account";
-    private String googleOAuthRedirectUri = "http://localhost:8080/oauth2callback";
+
+    @Value("${google.application.name:Box-Google-Converter}")
+    private String googleApplicationName;
+
+    @Value("${google.auth.type:service_account}")
+    private String googleAuthType;
+
+    @Value("${google.oauth.redirect.uri:http://localhost:8080/oauth2callback}")
+    private String googleOAuthRedirectUri;
+
+    @Value("${google.impersonate.user:}")
     private String googleImpersonateUser;
-    private String dbPath = "./migration-results.db";
-    private int threadPoolSize = 100;
-    private int threadPoolMaxSize = 500;
-    private String csvInputPath = "./migration-input.csv";
-    private int retryMaxAttempts = 3;
-    private long retryDelaySeconds = 5;
+
+    @Value("${db.path:./migration-results.db}")
+    private String dbPath;
+
+    @Value("${thread.pool.size:100}")
+    private int threadPoolSize;
+
+    @Value("${thread.pool.max.size:500}")
+    private int threadPoolMaxSize;
+
+    @Value("${csv.input.path:./migration-input.csv}")
+    private String csvInputPath;
+
+    @Value("${retry.max.attempts:3}")
+    private int retryMaxAttempts;
+
+    @Value("${retry.delay.seconds:5}")
+    private long retryDelaySeconds;
 
     public AppConfig() {
         // No-arg constructor for Spring

@@ -33,10 +33,12 @@ public class BatchConfig {
 
     @Bean
     @Primary
-    @ConfigurationProperties(prefix = "spring.datasource")
-    public DataSource dataSource() {
-        logger.info("Initializing primary SQLite database datasource");
-        return DataSourceBuilder.create().build();
+    public DataSource dataSource(AppConfig config) {
+        logger.info("Initializing primary SQLite database datasource for: {}", config.getDbPath());
+        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName("org.sqlite.JDBC");
+        dataSource.setUrl("jdbc:sqlite:" + config.getDbPath());
+        return dataSource;
     }
 
     @Bean

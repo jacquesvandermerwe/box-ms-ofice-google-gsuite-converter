@@ -78,6 +78,8 @@ public class MigrationRepository {
                 file_size_bytes, updated_at, completed_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
             ON CONFLICT(box_file_id) DO UPDATE SET
+                box_file_path = COALESCE(excluded.box_file_path, box_file_path),
+                box_file_name = COALESCE(excluded.box_file_name, box_file_name),
                 google_drive_file_id = excluded.google_drive_file_id,
                 google_drive_path = excluded.google_drive_path,
                 google_drive_web_view_link = excluded.google_drive_web_view_link,
@@ -230,6 +232,107 @@ public class MigrationRepository {
         }
 
         return stats;
+    }
+
+    public List<MigrationRecord> getRecordsPaginated(int offset, int limit, String statusFilter, String search) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM migration_records WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (statusFilter != null && !statusFilter.isEmpty()) {
+            sql.append(" AND status = ?");
+            params.add(statusFilter);
+        }
+
+        if (search != null && !search.isEmpty()) {
+            sql.append(" AND (box_file_id LIKE ? OR box_file_name LIKE ? OR error_message LIKE ? OR user_email LIKE ?)");
+            String like = "%" + search + "%";
+            params.add(like);
+            params.add(like);
+            params.add(like);
+            params.add(like);
+        }
+
+        sql.append(" ORDER BY id DESC LIMIT ? OFFSET ?");
+        params.add(limit);
+        params.add(offset);
+
+        List<MigrationRecord> records = new ArrayList<>();
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                Object param = params.get(i);
+                if (param instanceof Integer) {
+                    pstmt.setInt(i + 1, (Integer) param);
+                } else {
+                    pstmt.setString(i + 1, param.toString());
+                }
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    records.add(mapResultSetToRecord(rs));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to retrieve paginated records", e);
+            throw new RuntimeException("Database query failed", e);
+        }
+
+        return records;
+    }
+
+    public long getRecordCount(String statusFilter, String search) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM migration_records WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (statusFilter != null && !statusFilter.isEmpty()) {
+            sql.append(" AND status = ?");
+            params.add(statusFilter);
+        }
+
+        if (search != null && !search.isEmpty()) {
+            sql.append(" AND (box_file_id LIKE ? OR box_file_name LIKE ? OR error_message LIKE ? OR user_email LIKE ?)");
+            String like = "%" + search + "%";
+            params.add(like);
+            params.add(like);
+            params.add(like);
+            params.add(like);
+        }
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                pstmt.setString(i + 1, params.get(i).toString());
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to count records", e);
+        }
+
+        return 0;
+    }
+
+    public synchronized void deleteAllRecords() {
+        String sql = "DELETE FROM migration_records";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+
+            int deletedCount = stmt.executeUpdate(sql);
+            logger.info("Deleted {} records from migration_records table", deletedCount);
+
+        } catch (SQLException e) {
+            logger.error("Failed to delete all records", e);
+            throw new RuntimeException("Failed to reset database", e);
+        }
     }
 
     private MigrationRecord mapResultSetToRecord(ResultSet rs) throws SQLException {

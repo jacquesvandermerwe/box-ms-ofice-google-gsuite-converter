@@ -150,11 +150,12 @@ public class MigrationItemProcessor implements ItemProcessor<MigrationRecord, Mi
             return "unknown";
         }
 
-        String extension = FileConversionMapping.getDecoupledExtension(googleMimeType);
-        if (extension != null) {
-            return "decoupled ." + extension;
-        }
-        return googleMimeType;
+        return switch (googleMimeType) {
+            case "application/vnd.google-apps.document" -> "Word → Google Docs decoupled";
+            case "application/vnd.google-apps.spreadsheet" -> "Excel → Google Sheets decoupled";
+            case "application/vnd.google-apps.presentation" -> "PowerPoint → Google Slides decoupled";
+            default -> googleMimeType;
+        };
     }
 
     public static class FileAlreadyExistsException extends Exception {

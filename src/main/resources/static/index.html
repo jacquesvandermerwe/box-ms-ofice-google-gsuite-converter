@@ -3,310 +3,384 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Box to Google Drive Migration Dashboard</title>
+    <title>Box to Google Converter</title>
+    <link rel="icon" type="image/png" href="https://logos-world.net/wp-content/uploads/2020/10/Box-Logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_midnight.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
     <style>
         :root {
-            --bg-base: #090d16;
-            --bg-surface: rgba(17, 24, 39, 0.7);
-            --border-glow: rgba(99, 102, 241, 0.15);
-            --border-glow-hover: rgba(168, 85, 247, 0.35);
-            
-            --color-text-primary: #f3f4f6;
-            --color-text-secondary: #9ca3af;
-            
-            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-            --accent-glow: 0 0 20px rgba(99, 102, 241, 0.4);
-            
-            --status-pending: #eab308;
-            --status-active: #3b82f6;
-            --status-completed: #10b981;
-            --status-failed: #ef4444;
-            --status-converting: #a855f7;
-            --status-exporting: #ec4899;
-            --status-uploading: #f97316;
+            --blue-50: #edf5ff;
+            --blue-100: #d0e2ff;
+            --blue-200: #a6c8ff;
+            --blue-300: #78a9ff;
+            --blue-400: #4589ff;
+            --blue-500: #0061D5;
+            --blue-600: #0043a8;
+            --blue-700: #002d6e;
+            --blue-800: #001d4d;
+            --blue-900: #001233;
+
+            --gray-50: #f4f4f4;
+            --gray-100: #e0e0e0;
+            --gray-200: #c6c6c6;
+            --gray-300: #a8a8a8;
+            --gray-400: #8d8d8d;
+            --gray-500: #6f6f6f;
+            --gray-600: #525252;
+            --gray-700: #393939;
+            --gray-800: #262626;
+            --gray-900: #161616;
+
+            --bg: #0b1120;
+            --bg-raised: #0f1729;
+            --bg-overlay: #141e32;
+            --border: rgba(0, 97, 213, 0.12);
+            --border-strong: rgba(0, 97, 213, 0.25);
+            --text: #e8ecf2;
+            --text-secondary: #7b8fa8;
+            --accent: var(--blue-500);
+            --accent-subtle: rgba(0, 97, 213, 0.08);
+
+            --status-pending: #f0c000;
+            --status-active: #4589ff;
+            --status-completed: #42be65;
+            --status-failed: #fa4d56;
+            --status-converting: #a56eff;
+            --status-exporting: #ee5396;
+            --status-uploading: #ff832b;
+
+            --radius: 8px;
+            --radius-lg: 12px;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-base);
-            color: var(--color-text-primary);
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow-x: hidden;
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.05) 0%, transparent 40%);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ─── HEADER ─── */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-raised);
         }
 
         header {
-            padding: 1.5rem 2rem;
-            background: rgba(17, 24, 39, 0.4);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
+            padding: 1rem 1.75rem;
         }
 
-        .logo-container {
+        .brand {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.875rem;
         }
 
-        .logo-icon {
-            width: 2rem;
-            height: 2rem;
-            background: var(--accent-gradient);
-            border-radius: 0.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 1.2rem;
-            box-shadow: var(--accent-glow);
+        .brand img {
+            height: 1.25rem;
+            width: auto;
         }
 
-        .logo-text {
+        .brand h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text-secondary);
+        }
+
+        .brand h1 span {
+            color: var(--blue-300);
             font-weight: 700;
-            font-size: 1.25rem;
-            letter-spacing: -0.025em;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
         }
 
         .server-status {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: 0.85rem;
-            color: var(--color-text-secondary);
-            background: rgba(255, 255, 255, 0.03);
-            padding: 0.35rem 0.75rem;
-            border-radius: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            gap: 0.45rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
         }
 
         .pulse-dot {
-            width: 0.5rem;
-            height: 0.5rem;
-            background-color: var(--status-completed);
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
-            box-shadow: 0 0 10px var(--status-completed);
+            background: var(--status-completed);
+            box-shadow: 0 0 6px var(--status-completed);
             animation: pulse 2s infinite;
         }
 
-        main {
-            flex: 1;
-            max-width: 1200px;
-            width: 100%;
-            margin: 0 auto;
-            padding: 2rem;
+        /* ─── TABS ─── */
+        .tab-bar {
             display: flex;
-            flex-direction: column;
-            gap: 2rem;
+            background: var(--bg-raised);
+            border-bottom: 1px solid var(--border);
+            padding: 0 1.75rem;
+            gap: 0;
         }
 
+        .tab-btn {
+            padding: 0.75rem 1.25rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.825rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s;
+            letter-spacing: -0.01em;
+        }
+
+        .tab-btn:hover { color: var(--text); }
+
+        .tab-btn.active {
+            color: var(--blue-300);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-panel { display: none; }
+
+        /* ─── MAIN ─── */
+        .content {
+            flex: 1;
+            max-width: 1320px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1.5rem 1.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        /* ─── STATS ─── */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.25rem;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.875rem;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
         .stat-card {
-            background: var(--bg-surface);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-glow);
-            border-radius: 1rem;
-            padding: 1.5rem;
+            background: var(--bg-raised);
+            border: none;
+            border-radius: var(--radius-lg);
+            padding: 1.375rem 1.5rem;
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            gap: 0.35rem;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
         }
 
         .stat-card:hover {
-            border-color: var(--border-glow-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.05);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-1px);
         }
 
         .stat-label {
-            font-size: 0.85rem;
+            font-size: 0.7rem;
             font-weight: 500;
-            color: var(--color-text-secondary);
+            color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.06em;
         }
 
         .stat-value {
-            font-size: 2.25rem;
+            font-size: 2rem;
             font-weight: 800;
             letter-spacing: -0.03em;
+            font-variant-numeric: tabular-nums;
         }
 
-        .progress-section {
-            background: var(--bg-surface);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-glow);
-            border-radius: 1rem;
-            padding: 2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-        }
-
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .progress-title {
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-
-        .progress-percentage {
-            font-size: 1.75rem;
-            font-weight: 800;
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .progress-bar-container {
-            width: 100%;
-            height: 1rem;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 1rem;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            background: var(--accent-gradient);
-            box-shadow: var(--accent-glow);
-            border-radius: 1rem;
-            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .grid-main {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 1.5rem;
-        }
-
-        @media (max-width: 900px) {
-            .grid-main {
-                grid-template-columns: 1fr;
-            }
-        }
-
+        /* ─── PANELS ─── */
         .panel {
-            background: var(--bg-surface);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-glow);
-            border-radius: 1rem;
+            background: var(--bg-raised);
+            border: none;
+            border-radius: var(--radius-lg);
             padding: 1.5rem;
             display: flex;
             flex-direction: column;
-            gap: 1rem;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
+            gap: 0.875rem;
+            box-shadow: var(--shadow);
         }
 
         .panel-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border);
         }
 
         .panel-title {
-            font-weight: 700;
-            font-size: 1.05rem;
+            font-weight: 600;
+            font-size: 0.875rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            color: var(--blue-200);
         }
 
-        .table-container {
-            overflow-x: auto;
-            width: 100%;
+        /* ─── PROGRESS ─── */
+        .progress-section {
+            background: var(--bg-raised);
+            border: none;
+            border-radius: var(--radius-lg);
+            padding: 1.375rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            box-shadow: var(--shadow);
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
         }
+
+        .progress-title { font-weight: 600; font-size: 0.875rem; }
+
+        .progress-percentage {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--blue-300);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: var(--accent-subtle);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--blue-600), var(--accent), var(--blue-400));
+            border-radius: 3px;
+            transition: width 0.6s ease;
+        }
+
+        /* ─── BUTTONS ─── */
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.625rem;
+        }
+
+        .btn {
+            padding: 0.55rem 1rem;
+            border: none;
+            border-radius: var(--radius);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            text-decoration: none;
+            letter-spacing: -0.01em;
+        }
+
+        .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover:not(:disabled) { background: var(--blue-400); }
+
+        .btn-danger { background: var(--status-failed); color: white; }
+        .btn-danger:hover:not(:disabled) { background: #ff6b6b; }
+
+        .btn-secondary {
+            background: var(--accent-subtle);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(0, 97, 213, 0.14);
+            border-color: var(--border-strong);
+        }
+
+        /* ─── TABLES ─── */
+        .table-container { overflow-x: auto; width: 100%; }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
 
         th {
-            padding: 0.75rem 1rem;
-            font-size: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            font-size: 0.675rem;
             font-weight: 600;
-            color: var(--color-text-secondary);
+            color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            letter-spacing: 0.06em;
+            background: var(--bg-overlay);
+            border-bottom: 1px solid var(--border);
         }
 
         td {
-            padding: 0.85rem 1rem;
-            font-size: 0.85rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            padding: 0.6rem 0.75rem;
+            font-size: 0.8rem;
+            border-bottom: 1px solid rgba(0, 97, 213, 0.06);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 250px;
+            max-width: 240px;
         }
 
-        tr:hover td {
-            background: rgba(255, 255, 255, 0.01);
-        }
+        tr:hover td { background: var(--accent-subtle); }
 
+        /* ─── STATUS BADGES ─── */
         .status-badge {
             display: inline-flex;
             align-items: center;
-            gap: 0.35rem;
-            padding: 0.25rem 0.6rem;
-            border-radius: 2rem;
-            font-size: 0.75rem;
+            gap: 0.3rem;
+            padding: 0.2rem 0.55rem;
+            border-radius: 3px;
+            font-size: 0.65rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.03em;
+            font-family: 'IBM Plex Mono', monospace;
         }
 
-        .badge-pending { background: rgba(234, 179, 8, 0.1); color: var(--status-pending); border: 1px solid rgba(234, 179, 8, 0.2); }
-        .badge-in_progress { background: rgba(59, 130, 246, 0.1); color: var(--status-active); border: 1px solid rgba(59, 130, 246, 0.2); }
-        .badge-downloading { background: rgba(59, 130, 246, 0.15); color: var(--status-active); border: 1px solid rgba(59, 130, 246, 0.3); }
-        .badge-converting { background: rgba(168, 85, 247, 0.15); color: var(--status-converting); border: 1px solid rgba(168, 85, 247, 0.3); }
-        .badge-exporting { background: rgba(236, 72, 153, 0.15); color: var(--status-exporting); border: 1px solid rgba(236, 72, 153, 0.3); }
-        .badge-uploading { background: rgba(249, 115, 22, 0.15); color: var(--status-uploading); border: 1px solid rgba(249, 115, 22, 0.3); }
-        .badge-completed { background: rgba(16, 185, 129, 0.1); color: var(--status-completed); border: 1px solid rgba(16, 185, 129, 0.2); }
-        .badge-failed { background: rgba(239, 68, 68, 0.1); color: var(--status-failed); border: 1px solid rgba(239, 68, 68, 0.2); }
+        .badge-pending { background: rgba(240, 192, 0, 0.12); color: var(--status-pending); }
+        .badge-in_progress { background: rgba(69, 137, 255, 0.12); color: var(--status-active); }
+        .badge-downloading { background: rgba(69, 137, 255, 0.15); color: var(--status-active); }
+        .badge-converting { background: rgba(165, 110, 255, 0.15); color: var(--status-converting); }
+        .badge-exporting { background: rgba(238, 83, 150, 0.15); color: var(--status-exporting); }
+        .badge-uploading { background: rgba(255, 131, 43, 0.15); color: var(--status-uploading); }
+        .badge-completed { background: rgba(66, 190, 101, 0.12); color: var(--status-completed); }
+        .badge-failed { background: rgba(250, 77, 86, 0.12); color: var(--status-failed); }
 
         .spinner {
-            width: 0.65rem;
-            height: 0.65rem;
+            width: 0.6rem;
+            height: 0.6rem;
             border: 1.5px solid currentColor;
             border-bottom-color: transparent;
             border-radius: 50%;
@@ -314,242 +388,660 @@
             animation: rotation 1s linear infinite;
         }
 
+        /* ─── TERMINAL ─── */
         .terminal-panel {
-            background: #040711;
-            border: 1px solid #1a2035;
-            border-radius: 1rem;
-            padding: 1.25rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            font-family: 'JetBrains Mono', monospace;
-            box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);
+            background: #060c18;
+            border: 1px solid rgba(0, 97, 213, 0.1);
+            border-radius: var(--radius);
+            padding: 0.875rem;
+            font-family: 'IBM Plex Mono', monospace;
         }
 
         .terminal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.8rem;
-            color: #4b5563;
-            border-bottom: 1px solid #111827;
-            padding-bottom: 0.5rem;
+            font-size: 0.675rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(0, 97, 213, 0.08);
+            padding-bottom: 0.4rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
 
         .terminal-logs {
-            height: 250px;
+            height: 200px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 0.4rem;
-            font-size: 0.8rem;
+            gap: 0.3rem;
+            font-size: 0.72rem;
             scrollbar-width: thin;
         }
 
-        .log-line {
-            line-height: 1.4;
-            display: flex;
-            gap: 0.75rem;
-        }
-
-        .log-timestamp {
-            color: #4f46e5;
-        }
-
+        .log-line { line-height: 1.5; display: flex; gap: 0.6rem; }
+        .log-timestamp { color: var(--blue-400); }
         .log-success { color: var(--status-completed); }
         .log-error { color: var(--status-failed); }
-        .log-info { color: var(--color-text-secondary); }
+        .log-info { color: var(--text-secondary); }
         .log-warn { color: var(--status-pending); }
 
+        /* ─── CSV UPLOAD ─── */
+        .csv-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.625rem;
+            padding-top: 0.875rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .csv-section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1.25rem;
+            background: var(--accent-subtle);
+            border: 1.5px dashed var(--border-strong);
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .file-input-label:hover {
+            background: rgba(0, 97, 213, 0.12);
+            border-color: var(--accent);
+            color: var(--text);
+        }
+
+        .file-input-label.has-file {
+            border-style: solid;
+            border-color: var(--status-completed);
+            background: rgba(66, 190, 101, 0.06);
+            color: var(--status-completed);
+        }
+
+        input[type="file"] { display: none; }
+
+        .csv-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.45rem 0.7rem;
+            background: var(--accent-subtle);
+            border-radius: var(--radius);
+            font-size: 0.78rem;
+        }
+
+        .csv-info-label { color: var(--text-secondary); }
+        .csv-info-value { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; }
+
+        /* ─── FORM INPUTS ─── */
+        .form-control {
+            background: var(--bg-overlay);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0.5rem 0.7rem;
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .form-control:focus { border-color: var(--accent); }
+        .form-control option { background: var(--bg-raised); }
+
+        /* ─── GRID ─── */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 5fr 3fr;
+            gap: 1.25rem;
+        }
+
+        @media (max-width: 960px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ─── API LINKS ─── */
+        .api-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 0.625rem;
+        }
+
+        .api-card {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            padding: 0.875rem 1.125rem;
+            background: var(--bg-raised);
+            border: none;
+            border-radius: var(--radius);
+            text-decoration: none;
+            transition: all 0.15s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .api-card:hover {
+            background: var(--bg-overlay);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-1px);
+        }
+
+        .api-card code {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--blue-300);
+            font-weight: 500;
+        }
+
+        .api-card .desc {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+        }
+
+        .api-card .method {
+            display: inline-block;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 0.1rem 0.35rem;
+            border-radius: 2px;
+            text-transform: uppercase;
+            font-family: 'IBM Plex Mono', monospace;
+            letter-spacing: 0.04em;
+        }
+
+        .method-get { background: rgba(66, 190, 101, 0.15); color: var(--status-completed); }
+        .method-post { background: rgba(69, 137, 255, 0.15); color: var(--blue-300); }
+
+        /* ─── TOAST ─── */
+        .toast {
+            position: fixed;
+            top: 1.5rem;
+            right: 1.5rem;
+            background: var(--bg-raised);
+            border: none;
+            border-radius: var(--radius);
+            padding: 0.85rem 1.25rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: none;
+            animation: slideIn 0.25s ease;
+            font-size: 0.82rem;
+            font-weight: 500;
+            max-width: 360px;
+        }
+
+        .toast.show { display: block; }
+        .toast-success { border-left: 3px solid var(--status-completed); }
+        .toast-error { border-left: 3px solid var(--status-failed); }
+
+        /* ─── FOOTER ─── */
         footer {
-            padding: 1.5rem;
+            padding: 1rem 1.75rem;
             text-align: center;
-            font-size: 0.75rem;
-            color: var(--color-text-secondary);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            background: rgba(17, 24, 39, 0.2);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            background: var(--bg-raised);
             margin-top: auto;
         }
 
+        /* ─── ANIMATIONS ─── */
         @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.5; }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
         }
 
         @keyframes rotation {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
-        /* Scrollbar styles */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        @keyframes slideIn {
+            from { transform: translateY(-8px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.01);
+
+        /* ─── SCROLLBAR ─── */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 97, 213, 0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 97, 213, 0.35); }
+
+        /* ─── TABULATOR OVERRIDES ─── */
+        #tabulator-grid {
+            border: none;
+            border-radius: var(--radius);
+            overflow: hidden;
         }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
+
+        .tabulator {
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.78rem;
+            color: var(--text);
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
+
+        .tabulator .tabulator-header {
+            background: var(--bg-overlay);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tabulator .tabulator-header .tabulator-col {
+            background: var(--bg-overlay);
+            border-right: 1px solid var(--border);
+        }
+
+        .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
+            color: var(--text-secondary);
+            font-size: 0.675rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .tabulator .tabulator-header .tabulator-col.tabulator-sortable .tabulator-col-title {
+            padding-right: 20px;
+        }
+
+        .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 3px;
+            padding: 0.3rem 0.5rem;
+            font-size: 0.72rem;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .tabulator .tabulator-tableholder .tabulator-table .tabulator-row {
+            background: var(--bg-raised);
+            border-bottom: 1px solid rgba(0, 97, 213, 0.06);
+            color: var(--text);
+        }
+
+        .tabulator .tabulator-tableholder .tabulator-table .tabulator-row:hover {
+            background: var(--accent-subtle);
+        }
+
+        .tabulator .tabulator-tableholder .tabulator-table .tabulator-row .tabulator-cell {
+            border-right: 1px solid rgba(0, 97, 213, 0.04);
+            padding: 0.5rem 0.6rem;
+        }
+
+        .tabulator .tabulator-footer {
+            background: var(--bg-overlay);
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.5rem 0.75rem;
+        }
+
+        .tabulator .tabulator-footer .tabulator-page {
+            background: var(--accent-subtle);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 3px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.72rem;
+            margin: 0 0.15rem;
+        }
+
+        .tabulator .tabulator-footer .tabulator-page.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .tabulator .tabulator-footer .tabulator-page:hover:not(.active):not(:disabled) {
+            background: rgba(0, 97, 213, 0.15);
+            border-color: var(--border-strong);
+        }
+
+        .tabulator .tabulator-footer .tabulator-page:disabled {
+            opacity: 0.3;
+        }
+
+        .tabulator .tabulator-footer .tabulator-page-size {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 3px;
+            padding: 0.25rem 0.4rem;
+            font-size: 0.72rem;
+        }
+
+        .tabulator .tabulator-cell.mono-cell {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .tabulator .tabulator-cell.wrap-cell {
+            white-space: normal;
+            word-break: break-word;
+            font-size: 0.72rem;
+        }
+
+        .tabulator .tabulator-col-group .tabulator-col-group-cols {
+            border-top: 1px solid var(--border);
+        }
+
+        .tabulator .tabulator-header .tabulator-col.tabulator-col-group .tabulator-col-title {
+            color: var(--blue-300);
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
         }
     </style>
 </head>
 <body>
-    <header>
-        <div class="logo-container">
-            <div class="logo-icon">M</div>
-            <div class="logo-text">Decoupled Migrator</div>
-        </div>
-        <div class="server-status">
-            <div class="pulse-dot"></div>
-            <span>Status: Running</span>
-        </div>
-    </header>
+    <div class="top-bar">
+        <header>
+            <div class="brand">
+                <img src="https://logos-world.net/wp-content/uploads/2020/10/Box-Logo.png" alt="Box">
+                <h1><span>Box Consulting</span> - Microsoft Office to Google Suite File Format Converter</h1>
+            </div>
+            <div class="server-status">
+                <div class="pulse-dot"></div>
+                <span>Status: Running</span>
+            </div>
+        </header>
 
-    <main>
-        <!-- Statistics Section -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <span class="stat-label">Total Files</span>
-                <span class="stat-value" id="stat-total">0</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Completed</span>
-                <span class="stat-value" style="color: var(--status-completed);" id="stat-completed">0</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Failed</span>
-                <span class="stat-value" style="color: var(--status-failed);" id="stat-failed">0</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Queue / Active</span>
-                <span class="stat-value" style="color: var(--status-pending);" id="stat-active">0</span>
-            </div>
-        </div>
+        <nav class="tab-bar">
+            <button class="tab-btn active" data-tab="migration" onclick="switchTab('migration')">Migration</button>
+            <button class="tab-btn" data-tab="database" onclick="switchTab('database')">Database</button>
+            <button class="tab-btn" data-tab="api" onclick="switchTab('api')">API &amp; Health</button>
+        </nav>
+    </div>
 
-        <!-- Progress Section -->
-        <div class="progress-section">
-            <div class="progress-header">
-                <span class="progress-title">Migration Progress</span>
-                <span class="progress-percentage" id="progress-text">0%</span>
+    <!-- ═══ TAB 1: MIGRATION ═══ -->
+    <div id="tab-migration" class="tab-panel" style="display: block;">
+        <div class="content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-label">Total Files</span>
+                    <span class="stat-value" id="stat-total">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Completed</span>
+                    <span class="stat-value" style="color: var(--status-completed);" id="stat-completed">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Failed</span>
+                    <span class="stat-value" style="color: var(--status-failed);" id="stat-failed">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Active / Pending</span>
+                    <span class="stat-value" style="color: var(--status-active);" id="stat-active">0</span>
+                </div>
             </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progress-bar"></div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--color-text-secondary);">
-                <span>Success Rate: <strong style="color: var(--status-completed);" id="success-rate">0%</strong></span>
-                <span>Job Status: <strong id="job-status-label">INITIALIZING</strong></span>
-            </div>
-        </div>
 
-        <!-- Main Body Grid -->
-        <div class="grid-main">
-            <!-- Recent / Active Table -->
             <div class="panel">
-                <div class="panel-header">
-                    <span class="panel-title">Active & Recent Migrations</span>
+                <div class="panel-header" style="border: none; padding-bottom: 0;">
+                    <span class="panel-title">Controls</span>
                 </div>
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Box File ID</th>
-                                <th>File Name</th>
-                                <th>Email</th>
-                                <th>Size</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="migration-table-body">
-                            <tr>
-                                <td colspan="5" style="text-align: center; color: var(--color-text-secondary); padding: 2rem;">
-                                    Waiting for records...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="btn-start-migration" onclick="startMigration()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        Start Migration
+                    </button>
+                    <button class="btn btn-danger" id="btn-stop-migration" onclick="stopMigration()" disabled>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12"></rect></svg>
+                        Stop
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetDatabase()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        Reset DB
+                    </button>
+                </div>
+                <div class="csv-section">
+                    <div class="csv-section-title">CSV Input</div>
+                    <div>
+                        <input type="file" id="csv-file-input" accept=".csv" onchange="handleFileSelect(event)">
+                        <label for="csv-file-input" class="file-input-label" id="file-input-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <span id="file-label-text">Choose CSV file or drop here</span>
+                        </label>
+                    </div>
+                    <div class="csv-info">
+                        <span class="csv-info-label">Active file:</span>
+                        <span class="csv-info-value" id="current-csv-path">Loading...</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Logger terminal console -->
-            <div class="panel" style="gap: 0.5rem;">
-                <div class="panel-header" style="border: none; padding-bottom: 0;">
-                    <span class="panel-title">System Logs</span>
+            <div class="progress-section">
+                <div class="progress-header">
+                    <span class="progress-title">Progress</span>
+                    <span class="progress-percentage" id="progress-text">0%</span>
                 </div>
-                <div class="terminal-panel">
-                    <div class="terminal-header">
-                        <span>Console Terminal</span>
-                        <span>v1.0.0</span>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-secondary);">
+                    <span>Success rate: <strong style="color: var(--status-completed);" id="success-rate">0%</strong></span>
+                    <span>Status: <strong id="job-status-label" style="color: var(--text-secondary);">IDLE</strong></span>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Recent Migrations</span>
                     </div>
-                    <div class="terminal-logs" id="terminal-logs">
-                        <div class="log-line">
-                            <span class="log-timestamp">[SYSTEM]</span>
-                            <span class="log-info">Dashboard initialized. Waiting for metrics feed...</span>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Box File ID</th>
+                                    <th>File Name</th>
+                                    <th>Email</th>
+                                    <th>Size</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="migration-table-body">
+                                <tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">No records.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="panel" style="gap: 0.5rem;">
+                    <div class="panel-header" style="border: none; padding-bottom: 0;">
+                        <span class="panel-title">Logs</span>
+                    </div>
+                    <div class="terminal-panel">
+                        <div class="terminal-header">
+                            <span>Console</span>
+                            <span>Live</span>
+                        </div>
+                        <div class="terminal-logs" id="terminal-logs">
+                            <div class="log-line">
+                                <span class="log-timestamp">[SYS]</span>
+                                <span class="log-info">Waiting for events...</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </main>
+    </div>
+
+    <!-- ═══ TAB 2: DATABASE ═══ -->
+    <div id="tab-database" class="tab-panel">
+        <div class="content">
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                        Database Browser
+                    </span>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span id="db-record-count" style="font-size: 0.72rem; color: var(--text-secondary); font-family: 'IBM Plex Mono', monospace;"></span>
+                        <button class="btn btn-secondary" style="padding: 0.4rem 0.7rem; font-size: 0.75rem;" onclick="clearAllFilters()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            Clear Filters
+                        </button>
+                        <button class="btn btn-secondary" style="padding: 0.4rem 0.7rem; font-size: 0.75rem;" onclick="exportRecords()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hidden elements to preserve IDs used by other JS -->
+                <div style="display:none;">
+                    <select id="db-status-filter"></select>
+                    <input id="db-search">
+                    <select id="db-page-size"><option value="50" selected>50</option></select>
+                    <tbody id="db-table-body"></tbody>
+                    <button id="db-prev-btn"></button>
+                    <span id="db-page-info"></span>
+                    <button id="db-next-btn"></button>
+                </div>
+
+                <!-- Tabulator container -->
+                <div id="tabulator-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB 3: API & HEALTH ═══ -->
+    <div id="tab-api" class="tab-panel">
+        <div class="content">
+            <div class="panel">
+                <div class="panel-header" style="border: none; padding-bottom: 0;">
+                    <span class="panel-title">System Health</span>
+                </div>
+                <div>
+                    <button class="btn btn-primary" onclick="checkHealth()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        Run Health Check
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header" style="border: none; padding-bottom: 0;">
+                    <span class="panel-title">API Endpoints</span>
+                </div>
+                <div class="api-grid">
+                    <a href="/api/status" target="_blank" class="api-card">
+                        <div><span class="method method-get">GET</span></div>
+                        <code>/api/status</code>
+                        <span class="desc">Migration statistics and recent records</span>
+                    </a>
+                    <a href="/actuator/health" target="_blank" class="api-card">
+                        <div><span class="method method-get">GET</span></div>
+                        <code>/actuator/health</code>
+                        <span class="desc">Application health indicator</span>
+                    </a>
+                    <a href="/actuator/metrics" target="_blank" class="api-card">
+                        <div><span class="method method-get">GET</span></div>
+                        <code>/actuator/metrics</code>
+                        <span class="desc">Performance metrics and telemetry</span>
+                    </a>
+                    <a href="/api/records" target="_blank" class="api-card">
+                        <div><span class="method method-get">GET</span></div>
+                        <code>/api/records</code>
+                        <span class="desc">Paginated records with filtering</span>
+                    </a>
+                    <a href="/api/records/export" target="_blank" class="api-card">
+                        <div><span class="method method-get">GET</span></div>
+                        <code>/api/records/export</code>
+                        <span class="desc">Download records as CSV</span>
+                    </a>
+                    <a href="/api/csv/current" target="_blank" class="api-card">
+                        <div><span class="method method-get">GET</span></div>
+                        <code>/api/csv/current</code>
+                        <span class="desc">Current CSV input file info</span>
+                    </a>
+                    <div class="api-card" style="cursor: default;">
+                        <div><span class="method method-post">POST</span></div>
+                        <code>/api/csv/upload</code>
+                        <span class="desc">Upload new CSV input (multipart)</span>
+                    </div>
+                    <div class="api-card" style="cursor: default;">
+                        <div><span class="method method-post">POST</span></div>
+                        <code>/api/migration/start</code>
+                        <span class="desc">Trigger migration batch job</span>
+                    </div>
+                    <div class="api-card" style="cursor: default;">
+                        <div><span class="method method-post">POST</span></div>
+                        <code>/api/migration/stop</code>
+                        <span class="desc">Stop running migration after current file</span>
+                    </div>
+                    <div class="api-card" style="cursor: default;">
+                        <div><span class="method method-post">POST</span></div>
+                        <code>/api/database/reset</code>
+                        <span class="desc">Delete all migration records</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <footer>
-        <p>&copy; 2026 Box to Google Drive Decoupled Migration Tool. Built with Spring Boot, Spring Batch, and Project Loom Virtual Threads.</p>
+        Box to Google Converter &mdash; Spring Boot &middot; Spring Batch &middot; Virtual Threads
     </footer>
+
+    <div id="toast" class="toast"></div>
 
     <script>
         const knownRecords = new Map();
 
         function formatBytes(bytes, decimals = 2) {
-            if (!bytes || bytes === 0) return '0 Bytes';
+            if (!bytes || bytes === 0) return '0 B';
             const k = 1024;
             const dm = decimals < 0 ? 0 : decimals;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
         }
 
         function getStatusBadge(status) {
-            let label = status;
             let spinner = '';
-            
-            // Add loaders for active task statuses
             if (['IN_PROGRESS', 'DOWNLOADING', 'CONVERTING', 'EXPORTING', 'UPLOADING'].includes(status)) {
                 spinner = '<span class="spinner"></span> ';
             }
-
-            return `<span class="status-badge badge-${status.toLowerCase()}">${spinner}${label}</span>`;
+            return `<span class="status-badge badge-${status.toLowerCase()}">${spinner}${status}</span>`;
         }
 
         function appendLog(timestamp, fileId, fileName, status, error) {
             const logsContainer = document.getElementById('terminal-logs');
             const logLine = document.createElement('div');
             logLine.className = 'log-line';
-
             let logClass = 'log-info';
-            let message = `File ${fileName} is now in state [${status}]`;
-
-            if (status === 'COMPLETED') {
-                logClass = 'log-success';
-                message = `✓ Successfully completed migration for: ${fileName}`;
-            } else if (status === 'FAILED') {
-                logClass = 'log-error';
-                message = `✗ Failed migrating: ${fileName} - Error: ${error || 'Unknown Error'}`;
-            } else if (status === 'DOWNLOADING') {
-                message = `↓ Downloading file from Box: ${fileName}`;
-            } else if (status === 'CONVERTING') {
-                message = `⇄ Converting file to Google Workspace format: ${fileName}`;
-            } else if (status === 'EXPORTING') {
-                message = `⚡ Exporting decoupled format (.gdoc/.gsheet) for: ${fileName}`;
-            } else if (status === 'UPLOADING') {
-                message = `↑ Uploading decoupled file back to Box: ${fileName}`;
-            }
-
-            const timeStr = new Date(timestamp).toLocaleTimeString();
-            logLine.innerHTML = `<span class="log-timestamp">[${timeStr}]</span><span class="${logClass}">${message}</span>`;
+            let message = `${fileName} → ${status}`;
+            if (status === 'COMPLETED') { logClass = 'log-success'; message = `✓ ${fileName}`; }
+            else if (status === 'FAILED') { logClass = 'log-error'; message = `✗ ${fileName} — ${error || 'Error'}`; }
+            else if (status === 'DOWNLOADING') { message = `↓ ${fileName}`; }
+            else if (status === 'CONVERTING') { message = `⇄ ${fileName}`; }
+            else if (status === 'EXPORTING') { message = `↗ ${fileName}`; }
+            else if (status === 'UPLOADING') { message = `↑ ${fileName}`; }
+            const timeStr = new Date(timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+            logLine.innerHTML = `<span class="log-timestamp">${timeStr}</span><span class="${logClass}">${message}</span>`;
             logsContainer.appendChild(logLine);
             logsContainer.scrollTop = logsContainer.scrollHeight;
         }
@@ -557,53 +1049,34 @@
         async function fetchStatus() {
             try {
                 const response = await fetch('/api/status');
-                if (!response.ok) throw new Error("HTTP Status Error");
+                if (!response.ok) throw new Error("HTTP Error");
                 const data = await response.json();
-
-                // 1. Update stats cards
                 document.getElementById('stat-total').innerText = data.stats.total;
                 document.getElementById('stat-completed').innerText = data.stats.completed;
                 document.getElementById('stat-failed').innerText = data.stats.failed;
                 document.getElementById('stat-active').innerText = data.stats.active + ' / ' + data.stats.pending;
-
-                // 2. Update progress indicator
                 const progress = data.stats.progress;
                 document.getElementById('progress-text').innerText = progress + '%';
                 document.getElementById('progress-bar').style.width = progress + '%';
                 document.getElementById('success-rate').innerText = data.stats.successRate + '%';
-
                 const statusLabel = document.getElementById('job-status-label');
-                if (data.stats.total > 0 && progress === 100) {
-                    statusLabel.innerText = "COMPLETED";
-                    statusLabel.style.color = "var(--status-completed)";
-                } else if (data.stats.active > 0) {
-                    statusLabel.innerText = "MIGRATING";
-                    statusLabel.style.color = "var(--status-active)";
-                } else {
-                    statusLabel.innerText = "IDLE";
-                    statusLabel.style.color = "var(--color-text-secondary)";
-                }
-
-                // 3. Update active table list
+                if (data.stats.total > 0 && progress === 100) { statusLabel.innerText = "DONE"; statusLabel.style.color = "var(--status-completed)"; }
+                else if (data.stats.active > 0) { statusLabel.innerText = "RUNNING"; statusLabel.style.color = "var(--status-active)"; }
+                else { statusLabel.innerText = "IDLE"; statusLabel.style.color = "var(--text-secondary)"; }
                 const tableBody = document.getElementById('migration-table-body');
                 if (data.recent && data.recent.length > 0) {
                     let html = '';
                     data.recent.forEach(record => {
-                        html += `
-                            <tr>
-                                <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--color-text-secondary);">${record.boxFileId}</td>
-                                <td title="${record.boxFileName || ''}"><strong>${record.boxFileName || 'Loading...'}</strong></td>
-                                <td title="${record.userEmail}">${record.userEmail}</td>
-                                <td>${formatBytes(record.fileSizeBytes)}</td>
-                                <td>${getStatusBadge(record.status)}</td>
-                            </tr>
-                        `;
-
-                        // 4. Log state changes
+                        html += `<tr>
+                            <td style="font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-secondary);">${record.boxFileId}</td>
+                            <td><strong>${record.boxFileName || (record.status === 'PENDING' ? '...' : '—')}</strong></td>
+                            <td>${record.userEmail}</td>
+                            <td>${formatBytes(record.fileSizeBytes)}</td>
+                            <td>${getStatusBadge(record.status)}</td>
+                        </tr>`;
                         const lastState = knownRecords.get(record.boxFileId);
                         if (lastState !== record.status) {
                             knownRecords.set(record.boxFileId, record.status);
-                            // We ignore log printing for basic initial PENDING states to avoid terminal clutter
                             if (lastState || record.status !== 'PENDING') {
                                 appendLog(Date.now(), record.boxFileId, record.boxFileName || record.boxFileId, record.status, record.errorMessage);
                             }
@@ -611,33 +1084,236 @@
                     });
                     tableBody.innerHTML = html;
                 } else {
-                    tableBody.innerHTML = `
-                        <tr>
-                            <td colspan="5" style="text-align: center; color: var(--color-text-secondary); padding: 2rem;">
-                                No recent records processed in this session.
-                            </td>
-                        </tr>
-                    `;
+                    tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-secondary); padding:1.5rem;">No records.</td></tr>`;
                 }
-
+                updateButtonStates(data.stats.migrationRunning || false);
             } catch (err) {
-                console.error("Failed to fetch dashboard metrics", err);
-                const pulseDot = document.querySelector('.pulse-dot');
-                if (pulseDot) {
-                    pulseDot.style.backgroundColor = 'var(--status-failed)';
-                    pulseDot.style.boxShadow = '0 0 10px var(--status-failed)';
-                }
-                const statusSpan = document.querySelector('.server-status span');
-                if (statusSpan) {
-                    statusSpan.innerText = 'Status: Disconnected';
-                    statusSpan.style.color = 'var(--status-failed)';
-                }
+                const dot = document.querySelector('.pulse-dot');
+                if (dot) { dot.style.background = 'var(--status-failed)'; dot.style.boxShadow = '0 0 6px var(--status-failed)'; }
             }
         }
 
-        // Start polling
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast toast-${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+
+        async function startMigration() {
+            const btn = document.getElementById('btn-start-migration');
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span> Starting...';
+                const res = await fetch('/api/migration/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) { showToast('Migration started', 'success'); appendLog(Date.now(), '', 'SYSTEM', 'Job started', ''); }
+                else { showToast(data.message || 'Failed', 'error'); btn.disabled = false; }
+            } catch (e) { showToast('Error: ' + e.message, 'error'); btn.disabled = false; }
+            finally { btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Start Migration`; }
+        }
+
+        async function stopMigration() {
+            try {
+                const res = await fetch('/api/migration/stop', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) { showToast(data.message, 'success'); appendLog(Date.now(), '', 'SYSTEM', 'Stop signal sent', ''); }
+                else { showToast(data.message, 'error'); }
+            } catch (e) { showToast('Failed to stop: ' + e.message, 'error'); }
+        }
+
+        async function checkHealth() {
+            try {
+                const res = await fetch('/actuator/health');
+                const data = await res.json();
+                showToast('Health: ' + data.status, data.status === 'UP' ? 'success' : 'error');
+            } catch (e) { showToast('Health check failed', 'error'); }
+        }
+
+        function updateButtonStates(running) {
+            document.getElementById('btn-start-migration').disabled = running;
+            document.getElementById('btn-stop-migration').disabled = !running;
+        }
+
+        async function resetDatabase() {
+            if (!confirm('Delete ALL migration records?\n\nThis cannot be undone.')) return;
+            try {
+                const res = await fetch('/api/database/reset', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) { showToast(`Reset: ${data.deletedRecords} records deleted`, 'success'); appendLog(Date.now(), '', 'SYSTEM', `DB reset — ${data.deletedRecords} deleted`, ''); fetchStatus(); loadDbRecords(0); }
+                else showToast(data.message, 'error');
+            } catch (e) { showToast('Reset failed: ' + e.message, 'error'); }
+        }
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const form = new FormData();
+            form.append('file', file);
+            const label = document.getElementById('file-input-label');
+            const text = document.getElementById('file-label-text');
+            try {
+                text.textContent = 'Uploading...';
+                label.classList.add('has-file');
+                const res = await fetch('/api/csv/upload', { method: 'POST', body: form });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`${data.totalRecords} records (${data.newRecords} new)`, 'success');
+                    text.textContent = `✓ ${file.name}`;
+                    updateCurrentCsvDisplay();
+                    appendLog(Date.now(), '', 'CSV', `${file.name} — ${data.totalRecords} records`, '');
+                } else { showToast(data.message, 'error'); text.textContent = 'Choose CSV file or drop here'; label.classList.remove('has-file'); }
+            } catch (e) { showToast('Upload failed', 'error'); text.textContent = 'Choose CSV file or drop here'; label.classList.remove('has-file'); }
+        }
+
+        async function updateCurrentCsvDisplay() {
+            try {
+                const res = await fetch('/api/csv/current');
+                const data = await res.json();
+                const el = document.getElementById('current-csv-path');
+                if (data.exists) { const f = data.csvPath.split('/').pop(); el.textContent = f; el.style.color = 'var(--status-completed)'; }
+                else { el.textContent = 'None'; el.style.color = 'var(--status-failed)'; }
+            } catch (e) {}
+        }
+
+        let currentDbPage = 0;
+        let searchTimeout = null;
+        let dbTable = null;
+
+        function debounceSearch() {}
+
+        function initTabulator() {
+            dbTable = new Tabulator("#tabulator-grid", {
+                ajaxURL: "/api/records",
+                ajaxParams: { size: 10000, page: 0 },
+                ajaxResponse: function(url, params, response) {
+                    document.getElementById('db-record-count').textContent = response.totalRecords + ' records';
+                    return response.records;
+                },
+                height: "520px",
+                layout: "fitColumns",
+                resizableColumns: true,
+                movableColumns: true,
+                pagination: "local",
+                paginationSize: 50,
+                paginationSizeSelector: [25, 50, 100, 200],
+                placeholder: "No records found",
+                columns: [
+                    {
+                        title: "Source",
+                        columns: [
+                            { title: "Box File ID", field: "boxFileId", width: 140, headerFilter: "input", cssClass: "mono-cell" },
+                            { title: "File Name", field: "boxFileName", minWidth: 180, headerFilter: "input",
+                                formatter: function(cell) { return cell.getValue() || '—'; }
+                            },
+                            { title: "Email", field: "userEmail", width: 160, headerFilter: "input" },
+                        ]
+                    },
+                    {
+                        title: "Conversion",
+                        columns: [
+                            { title: "Format", field: "originalFormat", width: 80, headerFilter: "input",
+                                formatter: function(cell) { return cell.getValue() || '—'; }
+                            },
+                            { title: "Converted", field: "convertedFormat", width: 120,
+                                formatter: function(cell) { return cell.getValue() || '—'; }
+                            },
+                            { title: "Size", field: "fileSizeBytes", width: 90, hozAlign: "right",
+                                formatter: function(cell) { return formatBytes(cell.getValue()); },
+                                sorter: "number"
+                            },
+                        ]
+                    },
+                    {
+                        title: "Result",
+                        columns: [
+                            { title: "Status", field: "status", width: 120, headerFilter: "list",
+                                headerFilterParams: { values: { "": "All", "COMPLETED": "Completed", "FAILED": "Failed", "PENDING": "Pending", "IN_PROGRESS": "In Progress", "DOWNLOADING": "Downloading", "CONVERTING": "Converting", "EXPORTING": "Exporting", "UPLOADING": "Uploading" } },
+                                formatter: function(cell) { return getStatusBadge(cell.getValue()); }
+                            },
+                            { title: "Error", field: "errorMessage", minWidth: 200, headerFilter: "input",
+                                formatter: function(cell) {
+                                    const val = cell.getValue();
+                                    if (!val) return '<span style="color:var(--text-secondary)">—</span>';
+                                    return '<span style="color:var(--status-failed)">' + val + '</span>';
+                                },
+                                tooltip: true,
+                                cssClass: "wrap-cell"
+                            },
+                        ]
+                    },
+                    {
+                        title: "Timestamps",
+                        columns: [
+                            { title: "Updated", field: "updatedAt", width: 155, sorter: "datetime",
+                                formatter: function(cell) {
+                                    const val = cell.getValue();
+                                    return val ? new Date(val).toLocaleString() : '—';
+                                }
+                            },
+                            { title: "Completed", field: "completedAt", width: 155, sorter: "datetime",
+                                formatter: function(cell) {
+                                    const val = cell.getValue();
+                                    return val ? new Date(val).toLocaleString() : '—';
+                                }
+                            },
+                        ]
+                    },
+                ],
+                initialSort: [{ column: "updatedAt", dir: "desc" }],
+            });
+        }
+
+        function loadDbRecords(page) {
+            if (dbTable) {
+                dbTable.setData("/api/records", { size: 10000, page: 0 });
+            }
+        }
+
+        function clearAllFilters() {
+            if (dbTable) {
+                dbTable.clearHeaderFilter();
+                showToast('Filters cleared', 'success');
+            }
+        }
+
+        function exportRecords() {
+            if (dbTable) {
+                const filters = dbTable.getHeaderFilters();
+                if (filters.length > 0) {
+                    // Filters active: export only matching rows via Tabulator (client-side)
+                    dbTable.download("csv", "migration_records_filtered.csv", {}, "active");
+                    showToast('Exported filtered rows to CSV', 'success');
+                } else {
+                    // No filters: server-side export (no record limit)
+                    window.open('/api/records/export', '_blank');
+                    showToast('Exporting all records from server', 'success');
+                }
+            } else {
+                window.open('/api/records/export', '_blank');
+                showToast('Export started', 'success');
+            }
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + name).style.display = 'block';
+            document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+            if (name === 'database') {
+                if (!dbTable) { initTabulator(); }
+                else { dbTable.setData("/api/records", { size: 10000, page: 0 }); }
+            }
+        }
+
+        const fileLabel = document.getElementById('file-input-label');
+        fileLabel.addEventListener('dragover', e => { e.preventDefault(); fileLabel.style.borderColor = 'var(--accent)'; fileLabel.style.background = 'rgba(0,97,213,0.1)'; });
+        fileLabel.addEventListener('dragleave', e => { e.preventDefault(); fileLabel.style.borderColor = ''; fileLabel.style.background = ''; });
+        fileLabel.addEventListener('drop', e => { e.preventDefault(); fileLabel.style.borderColor = ''; fileLabel.style.background = ''; if (e.dataTransfer.files.length) { document.getElementById('csv-file-input').files = e.dataTransfer.files; handleFileSelect({ target: { files: e.dataTransfer.files } }); }});
+
+        updateCurrentCsvDisplay();
         fetchStatus();
-        setInterval(fetchStatus, 1000);
+        setInterval(fetchStatus, 2000);
     </script>
 </body>
 </html>

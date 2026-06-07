@@ -26,15 +26,16 @@ public class MigrationRunner implements CommandLineRunner {
         try {
             logger.info("Initializing database...");
             repository.initialize();
+            logger.info("Database initialized successfully. Web server running on http://localhost:8080");
+            logger.info("Dashboard available at: http://localhost:8080/");
+            logger.info("API status endpoint: http://localhost:8080/api/status");
+            logger.info("To start migration, access the dashboard or call the migration endpoint");
 
-            logger.info("Starting migration orchestrator...");
-            orchestrator.startMigration();
-
-            logger.info("Migration process completed.");
-            System.exit(0);
+            // Do NOT auto-start migration - keep web server running
+            // Migration can be triggered via REST endpoint or dashboard
         } catch (Exception e) {
-            logger.error("Migration failed with error", e);
-            System.err.println("Migration failed: " + e.getMessage());
+            logger.error("Initialization failed with error", e);
+            System.err.println("Initialization failed: " + e.getMessage());
             System.exit(1);
         }
     }
