@@ -1,30 +1,36 @@
 package com.migration.repository;
 
+import com.migration.config.AppConfig;
 import com.migration.model.MigrationRecord;
 import com.migration.model.MigrationStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Repository;
 
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Repository
 public class MigrationRepository {
     private static final Logger logger = LoggerFactory.getLogger(MigrationRepository.class);
-    private final String dbPath;
+    private final DataSource dataSource;
+    private final AppConfig config;
 
-    public MigrationRepository(String dbPath) {
-        this.dbPath = dbPath;
+    public MigrationRepository(DataSource dataSource, AppConfig config) {
+        this.dataSource = dataSource;
+        this.config = config;
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+        return dataSource.getConnection();
     }
 
     public void initialize() {
-        logger.info("Initializing database at: {}", dbPath);
+        logger.info("Initializing database at: {}", config.getDbPath());
         String createTableSQL = """
             CREATE TABLE IF NOT EXISTS migration_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,6 +181,26 @@ public class MigrationRepository {
             }
         } catch (SQLException e) {
             logger.error("Failed to retrieve all records", e);
+            throw new RuntimeException("Database query failed", e);
+        }
+
+        return records;
+    }
+
+    public List<MigrationRecord> getRecentRecords(int limit) {
+        String sql = "SELECT * FROM migration_records ORDER BY updated_at DESC LIMIT ?";
+        List<MigrationRecord> records = new ArrayList<>();
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, limit);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    records.add(mapResultSetToRecord(rs));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to retrieve recent records", e);
             throw new RuntimeException("Database query failed", e);
         }
 

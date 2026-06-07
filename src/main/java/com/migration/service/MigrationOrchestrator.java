@@ -3,40 +3,42 @@ package com.migration.service;
 import com.migration.config.AppConfig;
 import com.migration.model.MigrationRecord;
 import com.migration.model.MigrationStatus;
-import com.migration.processor.MigrationTaskProcessor;
 import com.migration.repository.MigrationRepository;
 import com.migration.util.CsvReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
 
+@Service
 public class MigrationOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(MigrationOrchestrator.class);
 
-    private final BoxService boxService;
     private final GoogleDriveService driveService;
-    private final ConversionService conversionService;
     private final MigrationRepository repository;
     private final AppConfig config;
-    private ExecutorService executorService;
+    private final JobLauncher jobLauncher;
+    private final Job migrationJob;
 
-    public MigrationOrchestrator(BoxService boxService, GoogleDriveService driveService,
-                                ConversionService conversionService, MigrationRepository repository,
-                                AppConfig config) {
-        this.boxService = boxService;
+    public MigrationOrchestrator(GoogleDriveService driveService, MigrationRepository repository,
+                                AppConfig config, JobLauncher jobLauncher, Job migrationJob) {
         this.driveService = driveService;
-        this.conversionService = conversionService;
         this.repository = repository;
         this.config = config;
+        this.jobLauncher = jobLauncher;
+        this.migrationJob = migrationJob;
     }
 
     public void startMigration() {
         logger.info("========================================");
-        logger.info("Starting Box Office-to-Decoupled-Docs Migration");
+        logger.info("Starting Box Office-to-Decoupled-Docs Migration (Spring Batch)");
         logger.info("========================================");
 
         // Log authentication mode
@@ -68,60 +70,14 @@ public class MigrationOrchestrator {
                 driveService.validateServiceAccountImpersonation(recordsToProcess.get(0).getUserEmail());
             }
 
-            int maxConcurrency = config.getThreadPoolSize();
-            logger.info("Creating virtual thread executor with max concurrency: {}", maxConcurrency);
-            logger.info("Using virtual threads for lightweight, scalable I/O operations");
-            executorService = Executors.newVirtualThreadPerTaskExecutor();
+            logger.info("Launching Spring Batch job...");
+            JobParameters jobParameters = new JobParametersBuilder()
+                    .addLong("time", System.currentTimeMillis())
+                    .toJobParameters();
 
-            List<Future<MigrationRecord>> futures = new ArrayList<>();
+            JobExecution execution = jobLauncher.run(migrationJob, jobParameters);
 
-            for (MigrationRecord record : recordsToProcess) {
-                MigrationTaskProcessor task = new MigrationTaskProcessor(
-                        record, boxService, driveService, conversionService, repository
-                );
-                Future<MigrationRecord> future = executorService.submit(task);
-                futures.add(future);
-            }
-
-            logger.info("Submitted {} tasks for processing", futures.size());
-
-            int completed = 0;
-            int failed = 0;
-
-            for (Future<MigrationRecord> future : futures) {
-                try {
-                    MigrationRecord result = future.get();
-
-                    if (result.getStatus() == MigrationStatus.COMPLETED) {
-                        completed++;
-                        logger.info("✓ Successfully migrated: {}",
-                                   result.getBoxFileId());
-                    } else {
-                        failed++;
-                        logger.error("✗ Failed to migrate: {} - {}",
-                                    result.getBoxFileId(), result.getErrorMessage());
-                    }
-
-                } catch (InterruptedException e) {
-                    logger.error("Task interrupted", e);
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException e) {
-                    failed++;
-                    logger.error("Task execution failed", e.getCause());
-                }
-            }
-
-            executorService.shutdown();
-            try {
-                if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                    executorService.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executorService.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-
-            logger.info("All tasks completed. Completed: {}, Failed: {}", completed, failed);
+            logger.info("Spring Batch job finished with status: {}", execution.getStatus());
             printMigrationSummary();
 
         } catch (Exception e) {
@@ -168,12 +124,19 @@ public class MigrationOrchestrator {
         long failed = stats.getOrDefault(MigrationStatus.FAILED, 0L);
         long pending = stats.getOrDefault(MigrationStatus.PENDING, 0L);
         long inProgress = stats.getOrDefault(MigrationStatus.IN_PROGRESS, 0L);
+        long downloading = stats.getOrDefault(MigrationStatus.DOWNLOADING, 0L);
+        long converting = stats.getOrDefault(MigrationStatus.CONVERTING, 0L);
+        long exporting = stats.getOrDefault(MigrationStatus.EXPORTING, 0L);
+        long uploading = stats.getOrDefault(MigrationStatus.UPLOADING, 0L);
+
+        // Sum up active tasks
+        long active = inProgress + downloading + converting + exporting + uploading;
 
         logger.info("Total Records:     {}", total);
         logger.info("Completed:         {}", completed);
         logger.info("Failed:            {}", failed);
         logger.info("Pending:           {}", pending);
-        logger.info("In Progress:       {}", inProgress);
+        logger.info("Active/Running:    {}", active);
 
         if (total > 0) {
             double successRate = (completed * 100.0) / total;

@@ -5,26 +5,25 @@ import com.box.sdk.BoxAPIException;
 import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
+import com.migration.config.AppConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+@Service
 public class BoxService {
     private static final Logger logger = LoggerFactory.getLogger(BoxService.class);
     private final BoxAPIConnection api;
     private final String asUserId;
 
-    public BoxService(BoxAPIConnection api) {
-        this(api, null);
-    }
-
-    public BoxService(BoxAPIConnection api, String asUserId) {
+    public BoxService(BoxAPIConnection api, AppConfig config) {
         this.api = api;
-        this.asUserId = asUserId;
+        this.asUserId = config.getBoxAsUserId();
         if (asUserId != null && !asUserId.isEmpty()) {
             logger.info("Box service configured to act as user: {}", asUserId);
             api.asUser(asUserId);

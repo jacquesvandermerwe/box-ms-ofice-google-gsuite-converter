@@ -41,6 +41,22 @@ google.oauth.redirect.uri=http://localhost:8080/oauth2callback
 # Database Configuration
 db.path=./migration-results.db
 
+# Spring Boot Configuration
+spring.threads.virtual.enabled=true
+spring.datasource.url=jdbc:sqlite:${db.path:./migration-results.db}
+spring.datasource.driver-class-name=org.sqlite.JDBC
+
+# Web Server Port
+server.port=8080
+
+# Spring Batch Configuration
+spring.batch.job.enabled=false
+spring.batch.jdbc.initialize-schema=always
+
+# Actuator Configuration
+management.endpoints.web.exposure.include=health,info,metrics,prometheus
+management.endpoint.health.show-details=always
+
 # Threading Configuration (Virtual Threads)
 # Virtual threads are lightweight - can handle 100-500+ concurrent migrations
 # Recommended: 100 for most use cases, 200-500 for large-scale migrations

@@ -32,6 +32,9 @@ import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 
+import org.springframework.stereotype.Component;
+
+@Component
 public class CredentialsManager {
     private static final Logger logger = LoggerFactory.getLogger(CredentialsManager.class);
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();

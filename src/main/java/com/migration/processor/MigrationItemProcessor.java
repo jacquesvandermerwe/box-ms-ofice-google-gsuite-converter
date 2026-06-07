@@ -11,25 +11,24 @@ import com.migration.service.ConversionService;
 import com.migration.service.GoogleDriveService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.batch.item.ItemProcessor;
+import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.sql.Timestamp;
-import java.util.concurrent.Callable;
 
-public class MigrationTaskProcessor implements Callable<MigrationRecord> {
-    private static final Logger logger = LoggerFactory.getLogger(MigrationTaskProcessor.class);
+@Component
+public class MigrationItemProcessor implements ItemProcessor<MigrationRecord, MigrationRecord> {
+    private static final Logger logger = LoggerFactory.getLogger(MigrationItemProcessor.class);
 
-    private final MigrationRecord record;
     private final BoxService boxService;
     private final GoogleDriveService driveService;
     private final ConversionService conversionService;
     private final MigrationRepository repository;
 
-    public MigrationTaskProcessor(MigrationRecord record, BoxService boxService,
-                                  GoogleDriveService driveService, ConversionService conversionService,
-                                  MigrationRepository repository) {
-        this.record = record;
+    public MigrationItemProcessor(BoxService boxService, GoogleDriveService driveService,
+                                  ConversionService conversionService, MigrationRepository repository) {
         this.boxService = boxService;
         this.driveService = driveService;
         this.conversionService = conversionService;
@@ -37,8 +36,8 @@ public class MigrationTaskProcessor implements Callable<MigrationRecord> {
     }
 
     @Override
-    public MigrationRecord call() {
-        logger.info("Starting migration for Box file: {} ({})", record.getBoxFileId(), record.getBoxFileName());
+    public MigrationRecord process(MigrationRecord record) throws Exception {
+        logger.info("Starting batch migration for Box file: {} ({})", record.getBoxFileId(), record.getBoxFileName());
 
         try {
             repository.updateStatus(record.getBoxFileId(), MigrationStatus.IN_PROGRESS, null);
