@@ -1028,18 +1028,25 @@
             return `<span class="status-badge badge-${status.toLowerCase()}">${spinner}${status}</span>`;
         }
 
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         function appendLog(timestamp, fileId, fileName, status, error) {
             const logsContainer = document.getElementById('terminal-logs');
             const logLine = document.createElement('div');
             logLine.className = 'log-line';
             let logClass = 'log-info';
-            let message = `${fileName} → ${status}`;
-            if (status === 'COMPLETED') { logClass = 'log-success'; message = `✓ ${fileName}`; }
-            else if (status === 'FAILED') { logClass = 'log-error'; message = `✗ ${fileName} — ${error || 'Error'}`; }
-            else if (status === 'DOWNLOADING') { message = `↓ ${fileName}`; }
-            else if (status === 'CONVERTING') { message = `⇄ ${fileName}`; }
-            else if (status === 'EXPORTING') { message = `↗ ${fileName}`; }
-            else if (status === 'UPLOADING') { message = `↑ ${fileName}`; }
+            const safeName = escapeHTML(fileName);
+            const safeError = escapeHTML(error);
+            let message = `${safeName} → ${status}`;
+            if (status === 'COMPLETED') { logClass = 'log-success'; message = `✓ ${safeName}`; }
+            else if (status === 'FAILED') { logClass = 'log-error'; message = `✗ ${safeName} — ${safeError || 'Error'}`; }
+            else if (status === 'DOWNLOADING') { message = `↓ ${safeName}`; }
+            else if (status === 'CONVERTING') { message = `⇄ ${safeName}`; }
+            else if (status === 'EXPORTING') { message = `↗ ${safeName}`; }
+            else if (status === 'UPLOADING') { message = `↑ ${safeName}`; }
             const timeStr = new Date(timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
             logLine.innerHTML = `<span class="log-timestamp">${timeStr}</span><span class="${logClass}">${message}</span>`;
             logsContainer.appendChild(logLine);
@@ -1068,9 +1075,9 @@
                     let html = '';
                     data.recent.forEach(record => {
                         html += `<tr>
-                            <td style="font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-secondary);">${record.boxFileId}</td>
-                            <td><strong>${record.boxFileName || (record.status === 'PENDING' ? '...' : '—')}</strong></td>
-                            <td>${record.userEmail}</td>
+                            <td style="font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-secondary);">${escapeHTML(record.boxFileId)}</td>
+                            <td><strong>${escapeHTML(record.boxFileName) || (record.status === 'PENDING' ? '...' : '—')}</strong></td>
+                            <td>${escapeHTML(record.userEmail)}</td>
                             <td>${formatBytes(record.fileSizeBytes)}</td>
                             <td>${getStatusBadge(record.status)}</td>
                         </tr>`;

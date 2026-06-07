@@ -37,7 +37,7 @@ public class BatchConfig {
         logger.info("Initializing primary SQLite database datasource for: {}", config.getDbPath());
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.sqlite.JDBC");
-        dataSource.setUrl("jdbc:sqlite:" + config.getDbPath());
+        dataSource.setUrl("jdbc:sqlite:" + config.getDbPath() + "?journal_mode=WAL&busy_timeout=5000");
         return dataSource;
     }
 

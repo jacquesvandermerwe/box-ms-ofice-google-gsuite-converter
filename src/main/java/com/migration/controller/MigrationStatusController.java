@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 public class MigrationStatusController {
@@ -31,7 +32,7 @@ public class MigrationStatusController {
     private final MigrationRepository repository;
     private final MigrationOrchestrator orchestrator;
     private final AppConfig config;
-    private volatile boolean migrationRunning = false;
+    private final AtomicBoolean migrationRunning = new AtomicBoolean(false);
     private volatile String currentCsvPath = null;
 
     public MigrationStatusController(MigrationRepository repository, MigrationOrchestrator orchestrator, AppConfig config) {
@@ -70,7 +71,7 @@ public class MigrationStatusController {
         stats.put("active", active);
         stats.put("successRate", Math.round(successRate * 10.0) / 10.0);
         stats.put("progress", Math.round(progress * 10.0) / 10.0);
-        stats.put("migrationRunning", migrationRunning);
+        stats.put("migrationRunning", migrationRunning.get());
 
         Map<String, Object> response = new HashMap<>();
         response.put("stats", stats);
@@ -81,7 +82,7 @@ public class MigrationStatusController {
 
     @PostMapping("/api/migration/start")
     public Map<String, Object> startMigration() {
-        if (migrationRunning) {
+        if (!migrationRunning.compareAndSet(false, true)) {
             logger.warn("Migration start requested but migration is already running");
             return Map.of(
                 "success", false,
@@ -90,9 +91,7 @@ public class MigrationStatusController {
         }
 
         logger.info("Starting migration via REST API endpoint");
-        migrationRunning = true;
 
-        // Run migration asynchronously so web server stays responsive
         CompletableFuture.runAsync(() -> {
             try {
                 orchestrator.startMigration();
@@ -100,7 +99,7 @@ public class MigrationStatusController {
             } catch (Exception e) {
                 logger.error("Migration failed via API", e);
             } finally {
-                migrationRunning = false;
+                migrationRunning.set(false);
             }
         });
 
@@ -112,7 +111,7 @@ public class MigrationStatusController {
 
     @PostMapping("/api/migration/stop")
     public Map<String, Object> stopMigration() {
-        if (!migrationRunning) {
+        if (!migrationRunning.get()) {
             return Map.of(
                 "success", false,
                 "message", "No migration is currently running"
@@ -144,14 +143,15 @@ public class MigrationStatusController {
             );
         }
 
-        String filename = file.getOriginalFilename();
-        if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
-            logger.warn("CSV upload attempted with non-CSV file: {}", filename);
+        String rawFilename = file.getOriginalFilename();
+        if (rawFilename == null || !rawFilename.toLowerCase().endsWith(".csv")) {
+            logger.warn("CSV upload attempted with non-CSV file: {}", rawFilename);
             return Map.of(
                 "success", false,
                 "message", "Please upload a valid CSV file"
             );
         }
+        String filename = Paths.get(rawFilename).getFileName().toString();
 
         try {
             // Save uploaded file to a temporary location using absolute path
@@ -249,7 +249,7 @@ public class MigrationStatusController {
     }
 
     @GetMapping("/api/records/export")
-    public String exportRecordsCsv(
+    public void exportRecordsCsv(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String search,
             jakarta.servlet.http.HttpServletResponse response) throws IOException {
@@ -257,29 +257,33 @@ public class MigrationStatusController {
         response.setContentType("text/csv");
         response.setHeader("Content-Disposition", "attachment; filename=migration_records_export.csv");
 
-        List<MigrationRecord> records = repository.getRecordsPaginated(0, Integer.MAX_VALUE, status, search);
+        java.io.PrintWriter writer = response.getWriter();
+        writer.println("box_file_id,box_file_name,box_file_path,user_email,status,error_message,original_format,converted_format,file_size_bytes,google_drive_file_id,google_drive_web_view_link,created_at,completed_at");
 
-        StringBuilder csv = new StringBuilder();
-        csv.append("box_file_id,box_file_name,box_file_path,user_email,status,error_message,original_format,converted_format,file_size_bytes,google_drive_file_id,google_drive_web_view_link,created_at,completed_at\n");
+        int page = 0;
+        int pageSize = 500;
+        List<MigrationRecord> chunk;
 
-        for (MigrationRecord record : records) {
-            csv.append(escapeCsv(record.getBoxFileId())).append(",");
-            csv.append(escapeCsv(record.getBoxFileName())).append(",");
-            csv.append(escapeCsv(record.getBoxFilePath())).append(",");
-            csv.append(escapeCsv(record.getUserEmail())).append(",");
-            csv.append(escapeCsv(record.getStatus() != null ? record.getStatus().name() : "")).append(",");
-            csv.append(escapeCsv(record.getErrorMessage())).append(",");
-            csv.append(escapeCsv(record.getOriginalFormat())).append(",");
-            csv.append(escapeCsv(record.getConvertedFormat())).append(",");
-            csv.append(record.getFileSizeBytes() != null ? record.getFileSizeBytes() : "").append(",");
-            csv.append(escapeCsv(record.getGoogleDriveFileId())).append(",");
-            csv.append(escapeCsv(record.getGoogleDriveWebViewLink())).append(",");
-            csv.append(record.getCreatedAt() != null ? record.getCreatedAt().toString() : "").append(",");
-            csv.append(record.getCompletedAt() != null ? record.getCompletedAt().toString() : "").append("\n");
-        }
-
-        response.getWriter().write(csv.toString());
-        return null;
+        do {
+            chunk = repository.getRecordsPaginated(page * pageSize, pageSize, status, search);
+            for (MigrationRecord record : chunk) {
+                writer.print(escapeCsv(record.getBoxFileId())); writer.print(',');
+                writer.print(escapeCsv(record.getBoxFileName())); writer.print(',');
+                writer.print(escapeCsv(record.getBoxFilePath())); writer.print(',');
+                writer.print(escapeCsv(record.getUserEmail())); writer.print(',');
+                writer.print(escapeCsv(record.getStatus() != null ? record.getStatus().name() : "")); writer.print(',');
+                writer.print(escapeCsv(record.getErrorMessage())); writer.print(',');
+                writer.print(escapeCsv(record.getOriginalFormat())); writer.print(',');
+                writer.print(escapeCsv(record.getConvertedFormat())); writer.print(',');
+                writer.print(record.getFileSizeBytes() != null ? record.getFileSizeBytes() : ""); writer.print(',');
+                writer.print(escapeCsv(record.getGoogleDriveFileId())); writer.print(',');
+                writer.print(escapeCsv(record.getGoogleDriveWebViewLink())); writer.print(',');
+                writer.print(record.getCreatedAt() != null ? record.getCreatedAt().toString() : ""); writer.print(',');
+                writer.println(record.getCompletedAt() != null ? record.getCompletedAt().toString() : "");
+            }
+            writer.flush();
+            page++;
+        } while (chunk.size() == pageSize);
     }
 
     private String escapeCsv(String value) {
@@ -292,7 +296,7 @@ public class MigrationStatusController {
 
     @PostMapping("/api/database/reset")
     public Map<String, Object> resetDatabase() {
-        if (migrationRunning) {
+        if (migrationRunning.get()) {
             logger.warn("Database reset requested but migration is currently running");
             return Map.of(
                 "success", false,
