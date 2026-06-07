@@ -13,6 +13,9 @@ A Java application for migrating files from Box.com to Google Drive with automat
 - **Folder Structure Preservation**: Maintains Box folder hierarchy in Google Drive automatically
 - **🚀 Virtual Threads**: Lightweight, scalable concurrency (100-500+ concurrent migrations)
 - **High Performance**: 10x faster than traditional threading with minimal resource usage
+- **Spring Batch & H2**: Declarative step monitoring, chunking, and transaction isolation (metadata kept in H2)
+- **Visual Dashboard**: Responsive web interface (`http://localhost:8080/`) displaying overall progress, thread telemetry, and live logging
+- **Spring Boot Actuator**: Health check endpoints and Prometheus-ready telemetry
 - **Resume Capability**: SQLite database tracks state, allowing safe restarts
 - **Duplicate Detection**: Prevents re-uploading files that already exist
 - **Comprehensive Reporting**: Detailed logging and database reporting
@@ -123,18 +126,18 @@ box_file_id,box_file_path,user_email
 mvn clean package
 ```
 
-This creates an executable JAR: `target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar`
+This creates an executable Spring Boot fat JAR: `target/box-google-converter-1.0-SNAPSHOT.jar`
 
 ## Running
 
 ```bash
-java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 ```
 
 Or run directly with Maven:
 
 ```bash
-mvn exec:java -Dexec.mainClass="com.migration.Main"
+mvn spring-boot:run
 ```
 
 ## How It Works
@@ -288,39 +291,44 @@ mvn test
 ## Architecture
 
 ```
-┌─────────────┐
-│    Main     │
-└──────┬──────┘
-       │
-       ├──────────────┐
-       │              │
-┌──────▼──────┐  ┌───▼────────────┐
-│ AppConfig   │  │ Credentials    │
-│             │  │ Manager        │
-└─────────────┘  └────────────────┘
-       │
-       │
-┌──────▼──────────────────────┐
-│ MigrationOrchestrator       │
-│  - Loads CSV                │
-│  - Creates thread pool      │
-│  - Coordinates tasks        │
-└──────┬──────────────────────┘
-       │
-       ├─────────────┬─────────────┬──────────────┐
-       │             │             │              │
-┌──────▼──────┐ ┌───▼────────┐ ┌─▼─────────┐ ┌──▼──────────┐
-│ BoxService  │ │ GoogleDrive│ │Conversion │ │ Migration   │
-│             │ │ Service    │ │ Service   │ │ Repository  │
-└─────────────┘ └────────────┘ └───────────┘ └─────────────┘
-       │             │             │              │
-       └─────────────┴─────────────┴──────────────┘
+                       ┌─────────────────────────┐
+                       │   Main (Spring Boot)    │
+                       └────────────┬────────────┘
+                                    │
+           ┌────────────────────────┼────────────────────────┐
+           │                        │                        │
+  ┌────────▼────────┐      ┌────────▼────────┐      ┌────────▼────────┐
+  │   AppConfig     │      │   Credentials   │      │   Dashboard /   │
+  │  (Properties)   │      │     Manager     │      │   Status API    │
+  └────────┬────────┘      └────────┬────────┘      └─────────────────┘
+           │                        │
+           └──────────┬─────────────┘
                       │
-              ┌───────▼────────┐
-              │ Migration      │
-              │ TaskProcessor  │
-              │ (per file)     │
-              └────────────────┘
+           ┌──────────▼──────────┐
+           │MigrationOrchestrator│
+           │(Launches Batch Job) │
+           └──────────┬──────────┘
+                      │
+           ┌──────────▼──────────┐
+           │    Spring Batch     │
+           │ (H2 metadata repo)  │
+           └──────────┬──────────┘
+                      │
+           ┌──────────▼──────────┐
+           │MigrationItemProcessor│
+           │ (Virtual Threads)   │
+           └──────────┬──────────┘
+                      │
+      ┌───────────────┼───────────────┬───────────────┐
+      │               │               │               │
+┌─────▼──────┐  ┌─────▼──────┐  ┌─────▼──────┐  ┌─────▼──────┐
+│ BoxService │  │GoogleDrive │  │Conversion  │  │ Migration  │
+│            │  │  Service   │  │  Service   │  │Repository  │
+└────────────┘  └────────────┘  └────────────┘  └─────┬──────┘
+                                                      │
+                                                ┌─────▼──────┐
+                                                │ SQLite DB  │
+                                                └────────────┘
 ```
 
 ## License

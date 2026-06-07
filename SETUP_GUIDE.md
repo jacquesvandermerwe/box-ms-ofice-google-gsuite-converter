@@ -288,7 +288,7 @@ When you run the application for the first time:
 1. Build and run:
    ```bash
    mvn clean package
-   java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+   java -jar target/box-google-converter-1.0-SNAPSHOT.jar
    ```
 
 2. **Browser opens automatically** with Google sign-in page
@@ -689,7 +689,7 @@ mvn clean package
 # You should see: BUILD SUCCESS
 ```
 
-This creates: `target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar`
+This creates the Spring Boot fat JAR: `target/box-google-converter-1.0-SNAPSHOT.jar`
 
 ## Step 6: Run the Migration
 
@@ -698,7 +698,7 @@ This creates: `target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.ja
 First, test with 1-2 files:
 
 ```bash
-java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 ```
 
 ### Monitor Progress
@@ -767,7 +767,7 @@ If the migration fails or is interrupted:
 2. **Fix any errors** (check logs for details)
 3. **Re-run the same command**:
    ```bash
-   java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+   java -jar target/box-google-converter-1.0-SNAPSHOT.jar
    ```
 
 The tool automatically:
@@ -953,7 +953,7 @@ After=network.target
 Type=simple
 User=migration
 WorkingDirectory=/opt/box-google-converter
-ExecStart=/usr/bin/java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+ExecStart=/usr/bin/java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 Restart=on-failure
 
 [Install]

@@ -45,11 +45,16 @@ box-google-converter/
 │
 ├── src/main/
 │   ├── java/com/migration/
-│   │   ├── Main.java                          # Application entry point
+│   │   ├── Main.java                          # Spring Boot Entry Point
+│   │   ├── MigrationRunner.java               # CLI Migration Runner
 │   │   │
 │   │   ├── config/
-│   │   │   ├── AppConfig.java                 # Configuration loader
+│   │   │   ├── AppConfig.java                 # Configuration properties loader
+│   │   │   ├── BatchConfig.java               # Spring Batch Job, Step, and DB config
 │   │   │   └── CredentialsManager.java        # Box & Google auth
+│   │   │
+│   │   ├── controller/
+│   │   │   └── MigrationStatusController.java # REST API status endpoint
 │   │   │
 │   │   ├── model/
 │   │   │   ├── MigrationRecord.java           # Migration record entity
@@ -64,34 +69,37 @@ box-google-converter/
 │   │   │   ├── BoxService.java                # Box API operations
 │   │   │   ├── GoogleDriveService.java        # Google Drive API operations
 │   │   │   ├── ConversionService.java         # Format conversion logic
-│   │   │   └── MigrationOrchestrator.java     # Migration coordinator
+│   │   │   └── MigrationOrchestrator.java     # Batch Job trigger orchestrator
 │   │   │
 │   │   ├── processor/
-│   │   │   └── MigrationTaskProcessor.java    # Per-file migration worker
+│   │   │   └── MigrationItemProcessor.java    # Spring Batch file processing worker
 │   │   │
 │   │   └── util/
 │   │       └── CsvReader.java                 # CSV parsing utility
 │   │
 │   └── resources/
-│       ├── application.properties              # Configuration file
+│       ├── static/
+│       │   └── index.html                     # Real-time HTML dark mode dashboard
+│       ├── application.properties             # Configuration file
 │       └── logback.xml                        # Logging configuration
 │
 └── target/
-    └── box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar  # Executable JAR
+    └── box-google-converter-1.0-SNAPSHOT.jar  # Executable Spring Boot JAR
 ```
 
 ## 🔧 Technology Stack
 
 | Component | Technology | Version |
 |-----------|-----------|---------|
-| Language | Java | 17 |
-| Build Tool | Maven | 3.6+ |
+| Language | Java (Virtual Threads) | 21+ |
+| Framework | Spring Boot | 3.3.0 |
+| Concurrency | Project Loom / Batch Executor | Managed |
 | Box SDK | Box Java SDK | 4.10.0 |
 | Google Drive | Google Drive API v3 | 2.0.0 |
-| Database | SQLite | 3.45.3.0 |
+| Database | SQLite / H2 (Batch metadata) | 3.45.3.0 / 2.2+ |
 | CSV Parser | Apache Commons CSV | 1.10.0 |
 | Logging | SLF4J + Logback | 2.0.13 / 1.5.6 |
-| Testing | JUnit 5 | 5.10.2 |
+| Testing | Spring Boot Test + JUnit 5 | 5.10.2 |
 
 ## 📊 Database Schema
 
@@ -132,10 +140,10 @@ CREATE TABLE migration_records (
 
 ### 2. Parallel Processing
 
-- Configurable thread pool (default: 5-10 threads)
-- Each file processed independently
-- Thread-safe database updates
-- Graceful shutdown handling
+- Throttled virtual threads concurrency (default: 100 threads, config: `thread.pool.size`)
+- Spring Batch chunk-based Step execution
+- Thread-safe updates against SQLite
+- Graceful batch job termination and transaction boundaries
 
 ### 3. Resume Capability
 
@@ -227,7 +235,7 @@ FROM migration_records WHERE status = 'COMPLETED';
 mvn clean package
 
 # Run the migration
-java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 ```
 
 ### 2. Configuration
@@ -355,12 +363,9 @@ All original requirements have been successfully implemented:
 
 ## 🔮 Future Enhancements (Optional)
 
-- Web UI for monitoring progress
-- REST API for programmatic access
 - Email notifications on completion
 - Batch deletion from Box after successful migration
 - Support for additional formats (.doc, .xls, .ppt)
-- Metrics export (Prometheus/Grafana)
 - Incremental sync mode
 - Rate limiting configuration
 - Multi-region support
