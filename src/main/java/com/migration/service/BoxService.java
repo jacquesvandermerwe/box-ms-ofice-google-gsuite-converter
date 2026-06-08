@@ -6,6 +6,7 @@ import com.box.sdk.BoxFile;
 import com.box.sdk.BoxFolder;
 import com.box.sdk.BoxItem;
 import com.migration.config.AppConfig;
+import com.migration.config.CredentialsManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,22 +19,35 @@ import java.util.List;
 @Service
 public class BoxService {
     private static final Logger logger = LoggerFactory.getLogger(BoxService.class);
-    private final BoxAPIConnection api;
+    private final CredentialsManager credentialsManager;
     private final String asUserId;
 
-    public BoxService(BoxAPIConnection api, AppConfig config) {
-        this.api = api;
+    public BoxService(CredentialsManager credentialsManager, AppConfig config) {
+        this.credentialsManager = credentialsManager;
         this.asUserId = config.getBoxAsUserId();
-        if (asUserId != null && !asUserId.isEmpty()) {
+        if (asUserId != null && !asUserId.isEmpty() && !asUserId.equals("YOUR_BOX_USER_ID")) {
             logger.info("Box service configured to act as user: {}", asUserId);
+        }
+    }
+
+    /**
+     * Gets a Box API connection for the current thread.
+     * For JWT mode, returns a shared thread-safe connection.
+     * For developer token mode, returns a new connection per call.
+     */
+    private BoxAPIConnection getApi() {
+        BoxAPIConnection api = credentialsManager.getBoxConnection();
+        // Apply asUser if configured and not already set
+        if (asUserId != null && !asUserId.isEmpty() && !asUserId.equals("YOUR_BOX_USER_ID")) {
             api.asUser(asUserId);
         }
+        return api;
     }
 
     public InputStream downloadFile(String boxFileId) {
         logger.info("Downloading file from Box: {}", boxFileId);
         try {
-            BoxFile file = new BoxFile(api, boxFileId);
+            BoxFile file = new BoxFile(getApi(), boxFileId);
             java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
             file.download(outputStream);
             return new java.io.ByteArrayInputStream(outputStream.toByteArray());
@@ -51,7 +65,7 @@ public class BoxService {
             logger.warn("No As-User header set - service account acting as itself (may not have file access)");
         }
         try {
-            BoxFile file = new BoxFile(api, boxFileId);
+            BoxFile file = new BoxFile(getApi(), boxFileId);
             BoxFile.Info info = file.getInfo("name", "size", "path_collection", "parent", "content_created_at", "content_modified_at");
             logger.info("File info retrieved successfully: {} (size: {} bytes)", info.getName(), info.getSize());
             return info;
@@ -106,7 +120,7 @@ public class BoxService {
     public boolean fileExistsInFolder(String folderId, String fileName) {
         logger.debug("Checking if file exists in Box folder {}: {}", folderId, fileName);
         try {
-            BoxFolder folder = new BoxFolder(api, folderId);
+            BoxFolder folder = new BoxFolder(getApi(), folderId);
             for (BoxItem.Info child : folder.getChildren("name")) {
                 if (fileName.equals(child.getName())) {
                     return true;
@@ -122,7 +136,7 @@ public class BoxService {
     public BoxFile.Info uploadFile(InputStream content, String fileName, String folderId) {
         logger.info("Uploading file to Box folder {}: {}", folderId, fileName);
         try {
-            BoxFolder folder = new BoxFolder(api, folderId);
+            BoxFolder folder = new BoxFolder(getApi(), folderId);
             return folder.uploadFile(content, fileName);
         } catch (BoxAPIException e) {
             logger.error("Failed to upload file to Box: {} in folder {}", fileName, folderId, e);
@@ -137,7 +151,7 @@ public class BoxService {
     public BoxFile.Info uploadNewVersionWithName(String boxFileId, InputStream content, String newFileName) {
         logger.info("Uploading new Box version for file {} as '{}'", boxFileId, newFileName);
         try {
-            BoxFile file = new BoxFile(api, boxFileId);
+            BoxFile file = new BoxFile(getApi(), boxFileId);
             return file.uploadNewVersion(content, null, null, newFileName);
         } catch (BoxAPIException e) {
             logger.error("Failed to upload new version to Box file {}: {}", boxFileId, newFileName, e);
@@ -148,7 +162,7 @@ public class BoxService {
     public boolean fileExists(String boxFileId) {
         logger.debug("Checking if file exists in Box: {}", boxFileId);
         try {
-            BoxFile file = new BoxFile(api, boxFileId);
+            BoxFile file = new BoxFile(getApi(), boxFileId);
             file.getInfo("name");
             return true;
         } catch (BoxAPIException e) {

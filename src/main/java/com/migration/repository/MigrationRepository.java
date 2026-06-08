@@ -80,9 +80,9 @@ public class MigrationRepository {
             ON CONFLICT(box_file_id) DO UPDATE SET
                 box_file_path = COALESCE(excluded.box_file_path, box_file_path),
                 box_file_name = COALESCE(excluded.box_file_name, box_file_name),
-                google_drive_file_id = COALESCE(excluded.google_drive_file_id, google_drive_file_id),
+                google_drive_file_id = excluded.google_drive_file_id,
                 google_drive_path = COALESCE(excluded.google_drive_path, google_drive_path),
-                google_drive_web_view_link = COALESCE(excluded.google_drive_web_view_link, google_drive_web_view_link),
+                google_drive_web_view_link = excluded.google_drive_web_view_link,
                 status = excluded.status,
                 error_message = excluded.error_message,
                 original_format = COALESCE(excluded.original_format, original_format),
@@ -116,6 +116,71 @@ public class MigrationRepository {
         } catch (SQLException e) {
             logger.error("Failed to insert/update record for box file ID: {}", record.getBoxFileId(), e);
             throw new RuntimeException("Database operation failed", e);
+        }
+    }
+
+    /**
+     * Batch insert/update records in a single transaction for better performance.
+     * For large CSV uploads, this prevents individual fsync operations per record.
+     */
+    public void batchInsertOrUpdateRecords(List<MigrationRecord> records) {
+        String sql = """
+            INSERT INTO migration_records (
+                box_file_id, box_file_path, box_file_name, user_email,
+                google_drive_file_id, google_drive_path, google_drive_web_view_link,
+                status, error_message, original_format, converted_format,
+                file_size_bytes, updated_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            ON CONFLICT(box_file_id) DO UPDATE SET
+                box_file_path = COALESCE(excluded.box_file_path, box_file_path),
+                box_file_name = COALESCE(excluded.box_file_name, box_file_name),
+                google_drive_file_id = excluded.google_drive_file_id,
+                google_drive_path = COALESCE(excluded.google_drive_path, google_drive_path),
+                google_drive_web_view_link = excluded.google_drive_web_view_link,
+                status = excluded.status,
+                error_message = excluded.error_message,
+                original_format = COALESCE(excluded.original_format, original_format),
+                converted_format = COALESCE(excluded.converted_format, converted_format),
+                file_size_bytes = COALESCE(excluded.file_size_bytes, file_size_bytes),
+                updated_at = CURRENT_TIMESTAMP,
+                completed_at = COALESCE(excluded.completed_at, completed_at)
+        """;
+
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false); // Start transaction
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                for (MigrationRecord record : records) {
+                    pstmt.setString(1, record.getBoxFileId());
+                    pstmt.setString(2, record.getBoxFilePath());
+                    pstmt.setString(3, record.getBoxFileName());
+                    pstmt.setString(4, record.getUserEmail());
+                    pstmt.setString(5, record.getGoogleDriveFileId());
+                    pstmt.setString(6, record.getGoogleDrivePath());
+                    pstmt.setString(7, record.getGoogleDriveWebViewLink());
+                    pstmt.setString(8, record.getStatus().name());
+                    pstmt.setString(9, record.getErrorMessage());
+                    pstmt.setString(10, record.getOriginalFormat());
+                    pstmt.setString(11, record.getConvertedFormat());
+                    if (record.getFileSizeBytes() != null) {
+                        pstmt.setLong(12, record.getFileSizeBytes());
+                    } else {
+                        pstmt.setNull(12, Types.BIGINT);
+                    }
+                    pstmt.setTimestamp(13, record.getCompletedAt());
+                    pstmt.addBatch();
+                }
+                pstmt.executeBatch();
+                conn.commit(); // Commit transaction
+                logger.info("Batch inserted/updated {} records", records.size());
+            } catch (SQLException e) {
+                conn.rollback(); // Rollback on error
+                throw e;
+            } finally {
+                conn.setAutoCommit(true); // Restore auto-commit
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to batch insert/update records", e);
+            throw new RuntimeException("Batch database operation failed", e);
         }
     }
 

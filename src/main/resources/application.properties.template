@@ -1,40 +1,27 @@
 # Box Configuration
-# Choose ONE of the following authentication methods:
-
-# Option 1: JWT Config File (RECOMMENDED for production)
-# - Download from Box Developer Console → Your App → Configuration → "Generate a Public/Private Keypair"
-# - Auto-refreshing tokens, no manual intervention needed
-# - Supports enterprise and app user authentication
-box.config.file=/absolute/path/to/box_config.json
-
-# Option 2: Developer Token (for quick testing only)
-# - Generate from Box Developer Console → Your App → Configuration → "Developer Token"
-# - Expires after 60 minutes
-# - Good for initial testing, not suitable for production
+# Option 1: Use Developer Token (quick testing, expires in 60 minutes)
 # box.developer.token=YOUR_BOX_DEV_TOKEN
 
-# Box As-User Header (optional but often required)
-# When using JWT/service account, you typically need to specify which Box user to act as
-# The service account itself has no files - it must impersonate a user to access their content
-# Find your Box user ID:
-#   Method 1: Go to https://app.box.com/master/settings and look at the URL
-#   Method 2: Use Box API to list users: https://developer.box.com/reference/get-users/
-#   Method 3: Box CLI: box users:get YOUR_EMAIL
+# Option 2: Use JWT Config File (production, auto-refreshing)
+# Download from Box Developer Console → Your App → Configuration → "Generate a Developer Token" section
+box.config.file=./config/box_config.json
+
+# Box As-User Header (optional)
+# If using service account/JWT, specify the Box user ID to act as
+# This allows the service account to access files owned by this user
+# Find user ID: https://app.box.com/master/settings (look in URL or use Box API)
 # box.as.user.id=YOUR_BOX_USER_ID
 
-# Google Drive Configuration
-# For Google Workspace (service account with domain-wide delegation):
-#   - Set google.auth.type=service_account
-#   - Use service account JSON file
-#   - CSV must have user_email for each file (user to impersonate)
-# For Personal Google Account (OAuth user consent):
-#   - Set google.auth.type=oauth
-#   - Use OAuth client credentials JSON file
-#   - user_email in CSV will be ignored (uploads to authenticated user)
+# Google Drive Configuration - OAuth Mode (Personal Account)
+# google.auth.type=oauth
+# google.credentials.file=/absolute/path/to/oauth-client-credentials.json
+# google.application.name=Box-Google-Converter
+
+# Google Drive Configuration - Service Account Mode (Google Workspace)
 google.auth.type=service_account
-google.credentials.file=path/to/credentials.json
+google.credentials.file=./credentials/google-credentials.json
 google.application.name=Box-Google-Converter
-google.oauth.redirect.uri=http://localhost:8080/oauth2callback
+google.impersonate.user=user@yourdomain.com
 # Default Workspace user when CSV user_email is "ignored" (service account mode only)
 # google.impersonate.user=user@yourdomain.com
 
@@ -43,7 +30,7 @@ db.path=./migration-results.db
 
 # Spring Boot Configuration
 spring.threads.virtual.enabled=true
-spring.datasource.url=jdbc:sqlite:${db.path:./migration-results.db}
+spring.datasource.url=jdbc:sqlite:./migration-results.db
 spring.datasource.driver-class-name=org.sqlite.JDBC
 
 # Web Server Port
@@ -58,13 +45,14 @@ management.endpoints.web.exposure.include=health,info,metrics,prometheus
 management.endpoint.health.show-details=always
 
 # Threading Configuration (Virtual Threads)
-# Virtual threads are lightweight - can handle 100-500+ concurrent migrations
-# Recommended: 100 for most use cases, 200-500 for large-scale migrations
+# Virtual threads are lightweight - you can use much higher values than platform threads
+# Each virtual thread handles one file migration (I/O bound operation)
+# Recommended: 50-200 for most use cases, 500+ for large-scale migrations
 thread.pool.size=100
 thread.pool.max.size=500
 
 # CSV Input
-csv.input.path=./migration-input.csv
+csv.input.path=./input.csv
 
 # Retry Configuration
 retry.max.attempts=3

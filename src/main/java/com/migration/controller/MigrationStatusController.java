@@ -151,9 +151,10 @@ public class MigrationStatusController {
                 "message", "Please upload a valid CSV file"
             );
         }
-        String filename = Paths.get(rawFilename).getFileName().toString();
 
         try {
+            // Sanitize filename to prevent path traversal and handle invalid path characters
+            String filename = Paths.get(rawFilename).getFileName().toString();
             // Save uploaded file to a temporary location using absolute path
             Path uploadDir = Paths.get(System.getProperty("user.dir"), "uploads");
             if (!Files.exists(uploadDir)) {
@@ -173,20 +174,26 @@ public class MigrationStatusController {
             // Update the current CSV path
             currentCsvPath = filePath.toString();
 
-            // Load records into database
+            // Load records into database using batch insert for better performance
             int newRecords = 0;
             int existingRecords = 0;
+            List<MigrationRecord> recordsToInsert = new java.util.ArrayList<>();
 
             for (MigrationRecord record : records) {
                 MigrationRecord existing = repository.getRecordByBoxFileId(record.getBoxFileId());
 
                 if (existing == null) {
                     record.setStatus(MigrationStatus.PENDING);
-                    repository.insertOrUpdateRecord(record);
+                    recordsToInsert.add(record);
                     newRecords++;
                 } else {
                     existingRecords++;
                 }
+            }
+
+            // Batch insert all new records in a single transaction
+            if (!recordsToInsert.isEmpty()) {
+                repository.batchInsertOrUpdateRecords(recordsToInsert);
             }
 
             return Map.of(

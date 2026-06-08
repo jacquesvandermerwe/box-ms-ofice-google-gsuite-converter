@@ -21,8 +21,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.batch.support.transaction.ResourcelessTransactionManager;
 
 import javax.sql.DataSource;
 import java.util.List;
@@ -47,11 +46,13 @@ public class BatchConfig {
     @BatchDataSource
     public DataSource batchDataSource() {
         logger.info("Initializing in-memory H2 database for Spring Batch metadata");
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        com.zaxxer.hikari.HikariDataSource dataSource = new com.zaxxer.hikari.HikariDataSource();
         dataSource.setDriverClassName("org.h2.Driver");
-        dataSource.setUrl("jdbc:h2:mem:batchdb;DB_CLOSE_DELAY=-1;MODE=MySQL");
+        dataSource.setJdbcUrl("jdbc:h2:mem:batchdb;DB_CLOSE_DELAY=-1;MODE=MySQL");
         dataSource.setUsername("sa");
         dataSource.setPassword("");
+        dataSource.setMaximumPoolSize(10);
+        dataSource.setConnectionTimeout(30000);
         return dataSource;
     }
 
@@ -96,12 +97,15 @@ public class BatchConfig {
     }
 
     @Bean
-    public Step migrationStep(JobRepository jobRepository, PlatformTransactionManager transactionManager,
+    public Step migrationStep(JobRepository jobRepository,
                              ItemReader<MigrationRecord> reader, MigrationItemProcessor processor,
                              ItemWriter<MigrationRecord> writer, TaskExecutor taskExecutor,
                              AppConfig config) {
+        // Use ResourcelessTransactionManager to avoid deadlock with HikariCP pool size 1
+        // This allows the repository to manage its own short-lived connections
+        // enabling true parallel processing with virtual threads
         return new StepBuilder("migrationStep", jobRepository)
-                .<MigrationRecord, MigrationRecord>chunk(1, transactionManager)
+                .<MigrationRecord, MigrationRecord>chunk(1, new ResourcelessTransactionManager())
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)
