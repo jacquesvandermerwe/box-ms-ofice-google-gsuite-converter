@@ -81,9 +81,12 @@ graph TB
 | Spring Batch for orchestration | Declarative job/step model, restart semantics, chunk processing, built-in monitoring |
 | H2 for batch metadata | Spring Batch requires a relational store; H2 in-memory avoids polluting the app DB |
 | SQLite for application data | Lightweight, zero-config, file-based persistence for migration records |
+| HikariCP pool size 1 | Single-connection pool with WAL mode and busy_timeout=5000ms for thread-safe SQLite access |
 | Virtual threads (Java 21) | I/O-bound workload benefits from lightweight threads (thousands concurrent with minimal memory) |
 | Tabulator.js for grid | Full-featured data grid without heavyweight frameworks (React, Angular) |
-| Server-side + client-side export | Filtered exports use client-side Tabulator download; full exports use server-side streaming |
+| Server-side + client-side export | Filtered exports use client-side Tabulator download; full exports use server-side streaming (500-record chunks to prevent OOM) |
+| AtomicBoolean for migration start | compareAndSet prevents duplicate job launches from concurrent requests |
+| JobOperator.stop() for stopping | Proper Spring Batch signaling for graceful job stop (finishes current file) |
 | Decoupled conversion | Upload first, then convert via Google Drive API MIME type setting |
 
 ## REST API Endpoints
@@ -178,3 +181,7 @@ management.endpoint.health.show-details=always
 - Service account requires domain-wide delegation for multi-user
 - SQLite database contains file IDs and paths; treat as sensitive
 - Uploaded CSVs stored in `./uploads/` directory
+- **XSS protection**: `escapeHTML()` applied to all user-sourced data rendered in dashboard innerHTML
+- **Path traversal protection**: CSV upload filenames sanitized with `Paths.get(name).getFileName()` to prevent directory traversal
+- **Null-safe updates**: COALESCE on all metadata fields in ON CONFLICT UPDATE prevents null overwrites
+- **Database reset guard**: checks `orchestrator.isRunning()` as additional safety before clearing records

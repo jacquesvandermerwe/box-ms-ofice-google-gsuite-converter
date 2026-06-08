@@ -168,6 +168,8 @@ java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 mvn spring-boot:run
 ```
 
+**Note**: The application uses HikariCP for SQLite connection pooling (pool size 1 with WAL mode) to ensure thread-safe database access from virtual threads.
+
 Open `http://localhost:8080` to access the dashboard.
 
 ### Configuration
@@ -228,7 +230,7 @@ box_file_id,box_file_path,user_email
 | GET | `/api/csv/current` | Current CSV file info |
 | POST | `/api/csv/upload` | Upload CSV (multipart form) |
 | POST | `/api/migration/start` | Start batch migration job |
-| POST | `/api/migration/stop` | Stop running migration (JobOperator) |
+| POST | `/api/migration/stop` | Stop running migration gracefully via JobOperator.stop() |
 | POST | `/api/database/reset` | Clear all migration records |
 | GET | `/actuator/health` | Spring Actuator health |
 | GET | `/actuator/metrics` | Spring Actuator metrics |
