@@ -35,9 +35,11 @@ public class BatchConfig {
     @Primary
     public DataSource dataSource(AppConfig config) {
         logger.info("Initializing primary SQLite database datasource for: {}", config.getDbPath());
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        com.zaxxer.hikari.HikariDataSource dataSource = new com.zaxxer.hikari.HikariDataSource();
         dataSource.setDriverClassName("org.sqlite.JDBC");
-        dataSource.setUrl("jdbc:sqlite:" + config.getDbPath() + "?journal_mode=WAL&busy_timeout=5000");
+        dataSource.setJdbcUrl("jdbc:sqlite:" + config.getDbPath() + "?journal_mode=WAL&busy_timeout=5000");
+        dataSource.setMaximumPoolSize(1);
+        dataSource.setConnectionTimeout(30000);
         return dataSource;
     }
 

@@ -7,12 +7,12 @@ import com.migration.repository.MigrationRepository;
 import com.migration.util.CsvReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,16 +26,19 @@ public class MigrationOrchestrator {
     private final MigrationRepository repository;
     private final AppConfig config;
     private final JobLauncher jobLauncher;
+    private final JobOperator jobOperator;
     private final Job migrationJob;
 
     private volatile JobExecution currentExecution;
 
     public MigrationOrchestrator(GoogleDriveService driveService, MigrationRepository repository,
-                                AppConfig config, JobLauncher jobLauncher, Job migrationJob) {
+                                AppConfig config, JobLauncher jobLauncher, JobOperator jobOperator,
+                                Job migrationJob) {
         this.driveService = driveService;
         this.repository = repository;
         this.config = config;
         this.jobLauncher = jobLauncher;
+        this.jobOperator = jobOperator;
         this.migrationJob = migrationJob;
     }
 
@@ -100,10 +103,15 @@ public class MigrationOrchestrator {
             return false;
         }
 
-        logger.info("Stopping migration job (execution ID: {})", execution.getId());
-        execution.setStatus(BatchStatus.STOPPING);
-        logger.info("Stop signal sent. Job will stop after current chunk completes.");
-        return true;
+        try {
+            logger.info("Stopping migration job (execution ID: {})", execution.getId());
+            jobOperator.stop(execution.getId());
+            logger.info("Stop signal sent. Job will stop after current chunk completes.");
+            return true;
+        } catch (Exception e) {
+            logger.error("Failed to stop migration job", e);
+            return false;
+        }
     }
 
     public boolean isRunning() {

@@ -233,6 +233,8 @@ public class MigrationStatusController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String search) {
 
+        if (page < 0) page = 0;
+        if (size <= 0) size = 50;
         int offset = page * size;
         List<MigrationRecord> records = repository.getRecordsPaginated(offset, size, status, search);
         long totalCount = repository.getRecordCount(status, search);
@@ -288,7 +290,7 @@ public class MigrationStatusController {
 
     private String escapeCsv(String value) {
         if (value == null) return "";
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
             return "\"" + value.replace("\"", "\"\"") + "\"";
         }
         return value;
@@ -296,7 +298,7 @@ public class MigrationStatusController {
 
     @PostMapping("/api/database/reset")
     public Map<String, Object> resetDatabase() {
-        if (migrationRunning.get()) {
+        if (migrationRunning.get() || orchestrator.isRunning()) {
             logger.warn("Database reset requested but migration is currently running");
             return Map.of(
                 "success", false,

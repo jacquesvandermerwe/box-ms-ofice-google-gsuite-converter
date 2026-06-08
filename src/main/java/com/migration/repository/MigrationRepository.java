@@ -80,16 +80,16 @@ public class MigrationRepository {
             ON CONFLICT(box_file_id) DO UPDATE SET
                 box_file_path = COALESCE(excluded.box_file_path, box_file_path),
                 box_file_name = COALESCE(excluded.box_file_name, box_file_name),
-                google_drive_file_id = excluded.google_drive_file_id,
-                google_drive_path = excluded.google_drive_path,
-                google_drive_web_view_link = excluded.google_drive_web_view_link,
+                google_drive_file_id = COALESCE(excluded.google_drive_file_id, google_drive_file_id),
+                google_drive_path = COALESCE(excluded.google_drive_path, google_drive_path),
+                google_drive_web_view_link = COALESCE(excluded.google_drive_web_view_link, google_drive_web_view_link),
                 status = excluded.status,
                 error_message = excluded.error_message,
-                original_format = excluded.original_format,
-                converted_format = excluded.converted_format,
-                file_size_bytes = excluded.file_size_bytes,
+                original_format = COALESCE(excluded.original_format, original_format),
+                converted_format = COALESCE(excluded.converted_format, converted_format),
+                file_size_bytes = COALESCE(excluded.file_size_bytes, file_size_bytes),
                 updated_at = CURRENT_TIMESTAMP,
-                completed_at = excluded.completed_at
+                completed_at = COALESCE(excluded.completed_at, completed_at)
         """;
 
         try (Connection conn = getConnection();
