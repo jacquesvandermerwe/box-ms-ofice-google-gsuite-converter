@@ -1,30 +1,36 @@
 package com.migration.repository;
 
+import com.migration.config.AppConfig;
 import com.migration.model.MigrationRecord;
 import com.migration.model.MigrationStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Repository;
 
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Repository
 public class MigrationRepository {
     private static final Logger logger = LoggerFactory.getLogger(MigrationRepository.class);
-    private final String dbPath;
+    private final DataSource dataSource;
+    private final AppConfig config;
 
-    public MigrationRepository(String dbPath) {
-        this.dbPath = dbPath;
+    public MigrationRepository(DataSource dataSource, AppConfig config) {
+        this.dataSource = dataSource;
+        this.config = config;
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+        return dataSource.getConnection();
     }
 
     public void initialize() {
-        logger.info("Initializing database at: {}", dbPath);
+        logger.info("Initializing database at: {}", config.getDbPath());
         String createTableSQL = """
             CREATE TABLE IF NOT EXISTS migration_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,16 +78,18 @@ public class MigrationRepository {
                 file_size_bytes, updated_at, completed_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
             ON CONFLICT(box_file_id) DO UPDATE SET
+                box_file_path = COALESCE(excluded.box_file_path, box_file_path),
+                box_file_name = COALESCE(excluded.box_file_name, box_file_name),
                 google_drive_file_id = excluded.google_drive_file_id,
-                google_drive_path = excluded.google_drive_path,
+                google_drive_path = COALESCE(excluded.google_drive_path, google_drive_path),
                 google_drive_web_view_link = excluded.google_drive_web_view_link,
                 status = excluded.status,
                 error_message = excluded.error_message,
-                original_format = excluded.original_format,
-                converted_format = excluded.converted_format,
-                file_size_bytes = excluded.file_size_bytes,
+                original_format = COALESCE(excluded.original_format, original_format),
+                converted_format = COALESCE(excluded.converted_format, converted_format),
+                file_size_bytes = COALESCE(excluded.file_size_bytes, file_size_bytes),
                 updated_at = CURRENT_TIMESTAMP,
-                completed_at = excluded.completed_at
+                completed_at = COALESCE(excluded.completed_at, completed_at)
         """;
 
         try (Connection conn = getConnection();
@@ -108,6 +116,71 @@ public class MigrationRepository {
         } catch (SQLException e) {
             logger.error("Failed to insert/update record for box file ID: {}", record.getBoxFileId(), e);
             throw new RuntimeException("Database operation failed", e);
+        }
+    }
+
+    /**
+     * Batch insert/update records in a single transaction for better performance.
+     * For large CSV uploads, this prevents individual fsync operations per record.
+     */
+    public void batchInsertOrUpdateRecords(List<MigrationRecord> records) {
+        String sql = """
+            INSERT INTO migration_records (
+                box_file_id, box_file_path, box_file_name, user_email,
+                google_drive_file_id, google_drive_path, google_drive_web_view_link,
+                status, error_message, original_format, converted_format,
+                file_size_bytes, updated_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            ON CONFLICT(box_file_id) DO UPDATE SET
+                box_file_path = COALESCE(excluded.box_file_path, box_file_path),
+                box_file_name = COALESCE(excluded.box_file_name, box_file_name),
+                google_drive_file_id = excluded.google_drive_file_id,
+                google_drive_path = COALESCE(excluded.google_drive_path, google_drive_path),
+                google_drive_web_view_link = excluded.google_drive_web_view_link,
+                status = excluded.status,
+                error_message = excluded.error_message,
+                original_format = COALESCE(excluded.original_format, original_format),
+                converted_format = COALESCE(excluded.converted_format, converted_format),
+                file_size_bytes = COALESCE(excluded.file_size_bytes, file_size_bytes),
+                updated_at = CURRENT_TIMESTAMP,
+                completed_at = COALESCE(excluded.completed_at, completed_at)
+        """;
+
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false); // Start transaction
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                for (MigrationRecord record : records) {
+                    pstmt.setString(1, record.getBoxFileId());
+                    pstmt.setString(2, record.getBoxFilePath());
+                    pstmt.setString(3, record.getBoxFileName());
+                    pstmt.setString(4, record.getUserEmail());
+                    pstmt.setString(5, record.getGoogleDriveFileId());
+                    pstmt.setString(6, record.getGoogleDrivePath());
+                    pstmt.setString(7, record.getGoogleDriveWebViewLink());
+                    pstmt.setString(8, record.getStatus().name());
+                    pstmt.setString(9, record.getErrorMessage());
+                    pstmt.setString(10, record.getOriginalFormat());
+                    pstmt.setString(11, record.getConvertedFormat());
+                    if (record.getFileSizeBytes() != null) {
+                        pstmt.setLong(12, record.getFileSizeBytes());
+                    } else {
+                        pstmt.setNull(12, Types.BIGINT);
+                    }
+                    pstmt.setTimestamp(13, record.getCompletedAt());
+                    pstmt.addBatch();
+                }
+                pstmt.executeBatch();
+                conn.commit(); // Commit transaction
+                logger.info("Batch inserted/updated {} records", records.size());
+            } catch (SQLException e) {
+                conn.rollback(); // Rollback on error
+                throw e;
+            } finally {
+                conn.setAutoCommit(true); // Restore auto-commit
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to batch insert/update records", e);
+            throw new RuntimeException("Batch database operation failed", e);
         }
     }
 
@@ -181,6 +254,26 @@ public class MigrationRepository {
         return records;
     }
 
+    public List<MigrationRecord> getRecentRecords(int limit) {
+        String sql = "SELECT * FROM migration_records ORDER BY updated_at DESC LIMIT ?";
+        List<MigrationRecord> records = new ArrayList<>();
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, limit);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    records.add(mapResultSetToRecord(rs));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to retrieve recent records", e);
+            throw new RuntimeException("Database query failed", e);
+        }
+
+        return records;
+    }
+
     public Map<MigrationStatus, Long> getStatistics() {
         String sql = "SELECT status, COUNT(*) as count FROM migration_records GROUP BY status";
         Map<MigrationStatus, Long> stats = new HashMap<>();
@@ -204,6 +297,107 @@ public class MigrationRepository {
         }
 
         return stats;
+    }
+
+    public List<MigrationRecord> getRecordsPaginated(int offset, int limit, String statusFilter, String search) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM migration_records WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (statusFilter != null && !statusFilter.isEmpty()) {
+            sql.append(" AND status = ?");
+            params.add(statusFilter);
+        }
+
+        if (search != null && !search.isEmpty()) {
+            sql.append(" AND (box_file_id LIKE ? OR box_file_name LIKE ? OR error_message LIKE ? OR user_email LIKE ?)");
+            String like = "%" + search + "%";
+            params.add(like);
+            params.add(like);
+            params.add(like);
+            params.add(like);
+        }
+
+        sql.append(" ORDER BY id DESC LIMIT ? OFFSET ?");
+        params.add(limit);
+        params.add(offset);
+
+        List<MigrationRecord> records = new ArrayList<>();
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                Object param = params.get(i);
+                if (param instanceof Integer) {
+                    pstmt.setInt(i + 1, (Integer) param);
+                } else {
+                    pstmt.setString(i + 1, param.toString());
+                }
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    records.add(mapResultSetToRecord(rs));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to retrieve paginated records", e);
+            throw new RuntimeException("Database query failed", e);
+        }
+
+        return records;
+    }
+
+    public long getRecordCount(String statusFilter, String search) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM migration_records WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (statusFilter != null && !statusFilter.isEmpty()) {
+            sql.append(" AND status = ?");
+            params.add(statusFilter);
+        }
+
+        if (search != null && !search.isEmpty()) {
+            sql.append(" AND (box_file_id LIKE ? OR box_file_name LIKE ? OR error_message LIKE ? OR user_email LIKE ?)");
+            String like = "%" + search + "%";
+            params.add(like);
+            params.add(like);
+            params.add(like);
+            params.add(like);
+        }
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                pstmt.setString(i + 1, params.get(i).toString());
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to count records", e);
+        }
+
+        return 0;
+    }
+
+    public synchronized void deleteAllRecords() {
+        String sql = "DELETE FROM migration_records";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+
+            int deletedCount = stmt.executeUpdate(sql);
+            logger.info("Deleted {} records from migration_records table", deletedCount);
+
+        } catch (SQLException e) {
+            logger.error("Failed to delete all records", e);
+            throw new RuntimeException("Failed to reset database", e);
+        }
     }
 
     private MigrationRecord mapResultSetToRecord(ResultSet rs) throws SQLException {

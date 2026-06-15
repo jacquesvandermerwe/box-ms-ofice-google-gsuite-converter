@@ -288,7 +288,7 @@ When you run the application for the first time:
 1. Build and run:
    ```bash
    mvn clean package
-   java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+   java -jar target/box-google-converter-1.0-SNAPSHOT.jar
    ```
 
 2. **Browser opens automatically** with Google sign-in page
@@ -516,6 +516,50 @@ Before proceeding, verify your setup:
 
 ---
 
+## Google API Quotas and Rate Limits
+
+### Required Google API Quotas
+
+For large migrations, request these quota increases in GCP Console:
+- **Queries per 100 seconds**: 100,000
+- **Queries per 100 seconds per user**: 20,000
+
+### Rate Limiting Behavior
+
+- Google returns **403 errors** (not standard 429) when rate limited
+- `ENOTFOUND` and `ETIMEDOUT` errors also indicate rate limiting
+- Files with **25+ collaborators** increase rate limiting likelihood
+- If throttled, the app retries automatically
+
+### Mitigation Tips
+
+- Run migrations outside business hours
+- Split large migrations into smaller batches
+- The application handles retries automatically via `retry.max.attempts` configuration
+
+### Google Export Size Limit
+
+- Google's export API has a **10MB maximum** for exported files
+- Google Docs exceeding this limit must be split before conversion
+
+### Required OAuth Scopes (for Service Account)
+
+These scopes must be added to domain-wide delegation in Google Admin Console:
+- `https://www.googleapis.com/auth/admin.directory.group`
+- `https://www.googleapis.com/auth/admin.directory.user`
+- `https://www.googleapis.com/auth/drive`
+
+### Required APIs to Enable in GCP
+
+- **Admin SDK API**
+- **Google Drive API**
+
+### Suspended Accounts
+
+> **Important**: Suspended Google accounts are not compatible with this tool. Only active users in your Google Workspace domain are supported for impersonation. Ensure all `user_email` entries in your CSV correspond to active (non-suspended) accounts.
+
+---
+
 ## Step 3: Get Box File IDs
 
 You need the Box file IDs for files you want to migrate. Here are several ways to get them:
@@ -689,7 +733,7 @@ mvn clean package
 # You should see: BUILD SUCCESS
 ```
 
-This creates: `target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar`
+This creates the Spring Boot fat JAR: `target/box-google-converter-1.0-SNAPSHOT.jar`
 
 ## Step 6: Run the Migration
 
@@ -698,7 +742,7 @@ This creates: `target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.ja
 First, test with 1-2 files:
 
 ```bash
-java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 ```
 
 ### Monitor Progress
@@ -767,7 +811,7 @@ If the migration fails or is interrupted:
 2. **Fix any errors** (check logs for details)
 3. **Re-run the same command**:
    ```bash
-   java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+   java -jar target/box-google-converter-1.0-SNAPSHOT.jar
    ```
 
 The tool automatically:
@@ -953,7 +997,7 @@ After=network.target
 Type=simple
 User=migration
 WorkingDirectory=/opt/box-google-converter
-ExecStart=/usr/bin/java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+ExecStart=/usr/bin/java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 Restart=on-failure
 
 [Install]

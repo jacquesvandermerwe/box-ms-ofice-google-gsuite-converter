@@ -32,6 +32,9 @@ import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 
+import org.springframework.stereotype.Component;
+
+@Component
 public class CredentialsManager {
     private static final Logger logger = LoggerFactory.getLogger(CredentialsManager.class);
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
@@ -58,11 +61,26 @@ public class CredentialsManager {
         }
     }
 
+    /**
+     * Get a Box API connection. For JWT mode, returns a shared connection (thread-safe).
+     * For developer token mode, creates a new connection per call to avoid thread-safety issues.
+     */
     public BoxAPIConnection getBoxConnection() {
-        if (boxConnection == null) {
-            boxConnection = createBoxConnection();
+        // If using JWT, BoxDeveloperEditionAPIConnection handles token refresh thread-safely
+        if (config.getBoxConfigFile() != null && !config.getBoxConfigFile().isEmpty()) {
+            if (boxConnection == null) {
+                synchronized (this) {
+                    if (boxConnection == null) {
+                        boxConnection = createBoxConnection();
+                    }
+                }
+            }
+            return boxConnection;
         }
-        return boxConnection;
+
+        // For developer token mode, create new connection to avoid thread-safety issues
+        // Developer tokens don't auto-refresh, so no shared state concerns
+        return createBoxConnection();
     }
 
     private BoxAPIConnection createBoxConnection() {

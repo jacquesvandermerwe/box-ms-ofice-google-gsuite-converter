@@ -17,6 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.*;
 
+import org.springframework.stereotype.Service;
+
+@Service
 public class GoogleDriveService {
     private static final Logger logger = LoggerFactory.getLogger(GoogleDriveService.class);
     private static final String FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";

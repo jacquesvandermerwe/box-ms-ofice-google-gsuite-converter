@@ -1,159 +1,253 @@
 # Box to Google Drive Migration Tool
 
-A Java application for migrating files from Box.com to Google Drive with automatic format conversion from Microsoft Office formats to Google Workspace formats.
+A Spring Boot 3.3.0 application that migrates files from Box.com to Google Drive with automatic format conversion from Microsoft Office formats to Google Workspace formats. Features a web dashboard, Spring Batch orchestration, and Java 21 virtual threads for high-throughput parallel processing.
+
+## Architecture
+
+```mermaid
+graph TB
+    subgraph "Web Layer"
+        UI[Dashboard<br/>localhost:8080]
+        REST[MigrationStatusController<br/>REST API]
+        ACT[Spring Actuator<br/>/actuator]
+    end
+
+    subgraph "Orchestration"
+        ORCH[MigrationOrchestrator]
+        BATCH[Spring Batch Job<br/>H2 metadata store]
+        PROC[MigrationItemProcessor<br/>Virtual Threads]
+    end
+
+    subgraph "Services"
+        BOX[BoxService]
+        GDS[GoogleDriveService]
+        CONV[ConversionService]
+    end
+
+    subgraph "Data"
+        REPO[MigrationRepository]
+        SQLITE[(SQLite DB)]
+        H2[(H2 Batch Metadata)]
+        CSV[CsvReader]
+    end
+
+    subgraph "Configuration"
+        CONF[AppConfig]
+        CRED[CredentialsManager]
+        BCONF[BatchConfig]
+    end
+
+    UI -->|fetch/post| REST
+    REST --> ORCH
+    REST --> REPO
+    ORCH --> BATCH
+    BATCH --> PROC
+    PROC --> BOX
+    PROC --> GDS
+    PROC --> CONV
+    PROC --> REPO
+    REPO --> SQLITE
+    BATCH --> H2
+    CRED --> BOX
+    CRED --> GDS
+    CONF --> ORCH
+    BCONF --> BATCH
+    CSV --> REST
+```
+
+## Migration Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Dashboard
+    participant Controller
+    participant Orchestrator
+    participant SpringBatch
+    participant Processor
+    participant Box
+    participant Google
+
+    User->>Dashboard: Upload CSV / Start Migration
+    Dashboard->>Controller: POST /api/csv/upload
+    Controller->>Controller: Parse CSV, insert PENDING records
+    Dashboard->>Controller: POST /api/migration/start
+    Controller->>Orchestrator: startMigration()
+    Orchestrator->>SpringBatch: Launch Job (async)
+    
+    loop Each file (virtual threads)
+        SpringBatch->>Processor: process(MigrationRecord)
+        Processor->>Box: Download file
+        Box-->>Processor: File bytes
+        Processor->>Google: Create folder structure
+        Processor->>Google: Upload + convert
+        Google-->>Processor: Google Drive file ID
+        Processor->>Processor: Update record COMPLETED
+    end
+
+    Dashboard->>Controller: GET /api/status (polling)
+    Controller-->>Dashboard: Stats + recent records
+```
+
+## Dashboard Request/Response Flow
+
+```mermaid
+graph LR
+    subgraph "Browser - Dashboard Tabs"
+        T1[Migration Tab]
+        T2[Database Tab]
+        T3[API & Health Tab]
+    end
+
+    subgraph "REST Endpoints"
+        S1[GET /api/status]
+        S2[POST /api/migration/start]
+        S3[POST /api/migration/stop]
+        S4[POST /api/csv/upload]
+        S5[GET /api/csv/current]
+        S6[GET /api/records]
+        S7[GET /api/records/export]
+        S8[POST /api/database/reset]
+        S9[GET /actuator/health]
+        S10[GET /actuator/metrics]
+    end
+
+    T1 -->|Poll every 2s| S1
+    T1 --> S2
+    T1 --> S3
+    T1 --> S4
+    T1 --> S5
+    T2 -->|Tabulator.js grid| S6
+    T2 -->|CSV download| S7
+    T2 --> S8
+    T3 --> S9
+    T3 --> S10
+```
 
 ## Features
 
-### Core Features
-- **Selective Migration**: Process only specific files defined in CSV input
-- **Format Conversion**: Automatically converts Office files to Google Workspace formats
-  - .docx, .doc → Google Docs
-  - .xlsx, .xls → Google Sheets
-  - .pptx, .ppt → Google Slides
-- **Folder Structure Preservation**: Maintains Box folder hierarchy in Google Drive automatically
-- **🚀 Virtual Threads**: Lightweight, scalable concurrency (100-500+ concurrent migrations)
-- **High Performance**: 10x faster than traditional threading with minimal resource usage
-- **Resume Capability**: SQLite database tracks state, allowing safe restarts
-- **Duplicate Detection**: Prevents re-uploading files that already exist
-- **Comprehensive Reporting**: Detailed logging and database reporting
-- **Error Handling**: Robust error handling with detailed error messages
+- **Spring Batch orchestration** with H2 metadata store for job tracking
+- **Java 21 virtual threads** for lightweight, high-throughput concurrency (100-500+ concurrent files)
+- **Web dashboard** at `http://localhost:8080` with real-time status polling
+- **Tabulator.js database browser** with sorting, filtering, column grouping, and CSV export
+- **CSV upload** with drag-and-drop from the dashboard
+- **Migration stop** via Spring Batch JobOperator
+- **Database reset** to clear all records
+- **Format conversion**: Word, Excel, PowerPoint to Google Docs, Sheets, Slides (decoupled export)
+- **Folder structure preservation** from Box to Google Drive
+- **Resume capability** via SQLite state tracking
+- **Duplicate detection** prevents re-uploading existing files
+- **Spring Boot Actuator** for health checks and metrics
 
-### Authentication Options
-- **Box Authentication**:
-  - JWT Config (production - auto-refreshing tokens) ✅ Recommended
-  - Developer Token (testing - expires in 60 minutes)
-  - As-User header support for service account impersonation
-- **Google Authentication**:
-  - OAuth 2.0 (personal Google accounts) ✅ No Google Workspace required
-  - Service Account with domain-wide delegation (Google Workspace)
+### Authentication
 
-### CSV Flexibility
-- **Simplified format**: Only `box_file_id` and `user_email` required
-- **Automatic path detection**: File paths fetched from Box API (optional in CSV)
-- **Smart duplicate checking**: Strips extensions when checking for converted files
+| Provider | Method | Use Case |
+|----------|--------|----------|
+| Box | JWT Config | Production (auto-refreshing tokens) |
+| Box | Developer Token | Testing (expires in 60 minutes) |
+| Google | OAuth 2.0 | Personal accounts (no Workspace needed) |
+| Google | Service Account | Google Workspace with domain-wide delegation |
 
 ## Prerequisites
 
-- **Java 21 or higher** (required for virtual threads)
+- **Java 21+** (required for virtual threads)
 - Maven 3.6+
 - Box.com account with API access
 - Google Cloud project with Drive API enabled
-- **One of:**
-  - Personal Google account (for OAuth mode - uploads to your Drive)
-  - Google Workspace with admin access (for Service Account mode - multi-user)
-
-> **Note**: Virtual threads require Java 21+. See [VIRTUAL_THREADS.md](VIRTUAL_THREADS.md) for installation and performance details.
 
 ## Quick Start
 
-**Choose your setup path:**
+```bash
+# Build
+mvn clean package
 
-- **Personal Google Account?** → See [OAUTH_SETUP.md](OAUTH_SETUP.md) (5 minute setup)
-- **Google Workspace?** → See [SETUP_GUIDE.md](SETUP_GUIDE.md) (full setup guide)
-- **Compare both options?** → See [GOOGLE_CLOUD_SETUP_COMPARISON.md](GOOGLE_CLOUD_SETUP_COMPARISON.md)
+# Run
+java -jar target/box-google-converter-1.0-SNAPSHOT.jar
 
-## Detailed Setup
+# Or run with Maven
+mvn spring-boot:run
+```
 
-See [SETUP_GUIDE.md](SETUP_GUIDE.md) for comprehensive setup instructions covering:
-- Box JWT authentication and developer tokens
-- Google OAuth (personal accounts) and Service Account (Workspace)
-- Box As-User header configuration
-- CSV format options (simplified vs. full)
-- Troubleshooting common issues
+**Note**: The application uses HikariCP for SQLite connection pooling (pool size 1 with WAL mode) to ensure thread-safe database access from virtual threads.
 
-### Quick Configuration Example
+Open `http://localhost:8080` to access the dashboard.
+
+### Configuration
+
+Edit `src/main/resources/application.properties`:
 
 ```properties
-# Box Configuration - Choose ONE:
-box.config.file=/path/to/box_config.json  # JWT (recommended)
-# OR
-box.developer.token=YOUR_TOKEN  # Testing only (expires 60 min)
+# Box - Choose ONE:
+box.config.file=/path/to/box_config.json       # JWT (recommended)
+# box.developer.token=YOUR_TOKEN               # Testing only
 
-# Box As-User (optional but often required for JWT)
+# Box As-User (optional, for JWT service account impersonation)
 box.as.user.id=YOUR_BOX_USER_ID
 
-# Google Drive - OAuth Mode (Personal Account)
-google.auth.type=oauth
-google.credentials.file=/path/to/oauth-credentials.json
+# Google - Choose ONE:
+google.auth.type=oauth                          # Personal account
+# google.auth.type=service_account              # Workspace
+google.credentials.file=/path/to/credentials.json
+google.application.name=Box-Google-Converter
+# google.impersonate.user=user@domain.com       # Service account only
 
-# OR Google Drive - Service Account Mode (Workspace)
-# google.auth.type=service_account
-# google.credentials.file=/path/to/service-account-key.json
-
-# Database & CSV
+# Database
 db.path=./migration-results.db
-csv.input.path=./migration-input.csv
 
-# Virtual Threads (lightweight, scalable)
+# Virtual Threads
 thread.pool.size=100
 
 # CSV Input
-csv.input.path=./migration-input.csv
+csv.input.path=./input.csv
 
-# Retry Configuration
+# Retry
 retry.max.attempts=3
 retry.delay.seconds=5
 ```
 
 ### CSV Input Format
 
-**Simplified format (recommended):**
+**Simplified (recommended):**
 ```csv
 box_file_id,user_email
 123456789,user@example.com
 987654321,user@example.com
 ```
 
-The application automatically fetches file paths and names from Box API.
-
-**Legacy format (with explicit paths):**
+**With explicit paths:**
 ```csv
 box_file_id,box_file_path,user_email
 123456789,/Marketing/Q1,user@example.com
 ```
 
-**Columns:**
-- `box_file_id`: **Required** - The Box file ID (from Box URL or API)
-- `user_email`: **Required** - Target user email (ignored in OAuth mode)
-- `box_file_path`: **Optional** - Custom folder path (auto-detected if omitted)
+## REST API
 
-## Building
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/status` | Migration stats and recent records |
+| GET | `/api/records` | Paginated records (params: `page`, `size`, `status`, `search`) |
+| GET | `/api/records/export` | CSV export of all records |
+| GET | `/api/csv/current` | Current CSV file info |
+| POST | `/api/csv/upload` | Upload CSV (multipart form) |
+| POST | `/api/migration/start` | Start batch migration job |
+| POST | `/api/migration/stop` | Stop running migration gracefully via JobOperator.stop() |
+| POST | `/api/database/reset` | Clear all migration records |
+| GET | `/actuator/health` | Spring Actuator health |
+| GET | `/actuator/metrics` | Spring Actuator metrics |
 
-```bash
-mvn clean package
-```
+## Web Dashboard
 
-This creates an executable JAR: `target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar`
+The dashboard at `http://localhost:8080` has three tabs:
 
-## Running
+1. **Migration** - Start/stop migrations, upload CSV, view progress stats and recent activity
+2. **Database** - Tabulator.js grid with sortable columns, filtering, column groups (Source, Conversion, Result, Timestamps), client-side filtered export and server-side full export
+3. **API & Health** - Actuator health and metrics display
 
-```bash
-java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
-```
-
-Or run directly with Maven:
-
-```bash
-mvn exec:java -Dexec.mainClass="com.migration.Main"
-```
-
-## How It Works
-
-1. **CSV Loading**: Reads the input CSV and creates PENDING records in SQLite database
-2. **Resume Support**: Checks database for existing records (allows safe restart)
-3. **Parallel Processing**: Creates thread pool and processes files concurrently
-4. **Per-File Migration**:
-   - Downloads file from Box
-   - Creates folder structure in Google Drive
-   - Checks if file already exists (fails if exists)
-   - Uploads file to Google Drive
-   - Converts to Google Workspace format
-   - Updates database with results
-5. **Summary Report**: Displays statistics and success/failure counts
+**Design**: Box blue (#0061D5) themed dark UI with DM Sans and IBM Plex Mono typography.
 
 ## Database Schema
 
-The SQLite database (`migration-results.db`) contains:
+SQLite database (`migration-results.db`):
 
 ```sql
 CREATE TABLE migration_records (
@@ -176,160 +270,60 @@ CREATE TABLE migration_records (
 );
 ```
 
-## Querying Results
+**Statuses**: `PENDING`, `IN_PROGRESS`, `DOWNLOADING`, `UPLOADING`, `CONVERTING`, `EXPORTING`, `COMPLETED`, `FAILED`
 
-Query the database to check migration status:
+## Project Structure
 
-```bash
-sqlite3 migration-results.db
+```
+src/main/java/com/migration/
+  Main.java                          # @SpringBootApplication entry point
+  MigrationRunner.java               # CommandLineRunner (init DB, keep server alive)
+  config/
+    AppConfig.java                   # @Value-based configuration properties
+    BatchConfig.java                 # Spring Batch Job/Step/Reader/Writer/TaskExecutor
+    CredentialsManager.java          # Box JWT/Token + Google OAuth/ServiceAccount
+  controller/
+    MigrationStatusController.java   # All REST endpoints
+  service/
+    MigrationOrchestrator.java       # Launches/stops Spring Batch jobs
+    BoxService.java                  # Box API operations
+    GoogleDriveService.java          # Google Drive API operations
+    ConversionService.java           # Upload and convert to Google format
+  processor/
+    MigrationItemProcessor.java      # Spring Batch ItemProcessor (per file)
+  repository/
+    MigrationRepository.java         # SQLite CRUD with pagination/filtering
+  model/
+    MigrationRecord.java             # Migration record entity
+    MigrationStatus.java             # Status enum
+    FileConversionMapping.java       # Office-to-Google MIME mapping
+    ConversionResult.java            # Conversion result model
+  util/
+    CsvReader.java                   # CSV parsing
+
+src/main/resources/
+  static/index.html                  # Dashboard (Tabulator.js, Box blue theme)
+  banner.txt                         # Custom Box ASCII art startup banner
+  application.properties             # Configuration
+  logback.xml                        # Logging configuration
 ```
 
-```sql
--- Summary by status
-SELECT status, COUNT(*) FROM migration_records GROUP BY status;
+## Setup Guides
 
--- Failed migrations
-SELECT box_file_id, box_file_name, error_message 
-FROM migration_records 
-WHERE status = 'FAILED';
-
--- Completed migrations
-SELECT box_file_id, box_file_name, google_drive_file_id, google_drive_web_view_link
-FROM migration_records 
-WHERE status = 'COMPLETED';
-```
-
-## Resume After Failure
-
-The application automatically resumes from where it left off:
-
-1. If the application crashes or is stopped, simply restart it
-2. The database tracks which files are PENDING, IN_PROGRESS, COMPLETED, or FAILED
-3. Only PENDING and FAILED records will be retried
-
-## Logging
-
-Logs are written to:
-- **Console**: Real-time progress
-- **File**: `logs/migration-{date}.log` (rolling daily, 30-day retention)
-
-## Virtual Threads Performance
-
-This application uses **Java 21 Virtual Threads** for exceptional performance with minimal resource usage.
-
-### Performance Comparison
-
-| Metric | Platform Threads (Java 17) | Virtual Threads (Java 21) |
-|--------|---------------------------|---------------------------|
-| Max Concurrent | 5-10 | 100-500+ |
-| Memory per thread | ~1-2 MB | ~Few KB |
-| Throughput | 5-10 files/min | **50-200+ files/min** |
-| Resource Usage | High | Low |
-
-### Why Virtual Threads?
-
-Migration is **I/O-bound** (network operations waiting on Box and Google Drive APIs). Virtual threads:
-- Automatically park when waiting for I/O
-- Allow thousands of concurrent operations
-- Use minimal memory
-- Provide 10x+ performance improvement
-
-### Configuration Recommendations
-
-```properties
-# Small migrations (< 100 files)
-thread.pool.size=50
-
-# Medium migrations (100-1000 files) - RECOMMENDED
-thread.pool.size=100
-
-# Large migrations (1000+ files)
-thread.pool.size=200
-
-# Massive migrations (10,000+ files)
-thread.pool.size=500
-```
-
-**See [VIRTUAL_THREADS.md](VIRTUAL_THREADS.md) for detailed performance analysis and tuning guide.**
+- [OAUTH_SETUP.md](OAUTH_SETUP.md) - Google OAuth for personal accounts (5 min)
+- [SETUP_GUIDE.md](SETUP_GUIDE.md) - Full setup including Box JWT and Google Service Account
+- [GOOGLE_CLOUD_SETUP_COMPARISON.md](GOOGLE_CLOUD_SETUP_COMPARISON.md) - Compare Google auth options
 
 ## Troubleshooting
 
-### "Box credentials not configured properly"
-- Ensure `box.developer.token` is set in `application.properties`
-- Verify the token is valid (test in Box API Explorer)
-
-### "Google credentials file not configured"
-- Check that `google.credentials.file` points to a valid service account JSON file
-- Use absolute path to the credentials file
-
-### "File already exists at destination"
-- The application fails if a file with the same name exists in the target folder
-- This is by design (no overwrite per requirements)
-- Manually remove the file or update the CSV to skip it
-
-### "Failed to download file from Box"
-- Verify the Box file ID is correct
-- Check that the application has read permissions
-- Ensure the file hasn't been deleted from Box
-
-### "Security error while uploading file"
-- Verify domain-wide delegation is configured correctly
-- Ensure the service account has the correct OAuth scopes
-- Check that the user email is valid in your Google Workspace domain
-
-## Testing
-
-Run unit tests:
-
-```bash
-mvn test
-```
-
-## Architecture
-
-```
-┌─────────────┐
-│    Main     │
-└──────┬──────┘
-       │
-       ├──────────────┐
-       │              │
-┌──────▼──────┐  ┌───▼────────────┐
-│ AppConfig   │  │ Credentials    │
-│             │  │ Manager        │
-└─────────────┘  └────────────────┘
-       │
-       │
-┌──────▼──────────────────────┐
-│ MigrationOrchestrator       │
-│  - Loads CSV                │
-│  - Creates thread pool      │
-│  - Coordinates tasks        │
-└──────┬──────────────────────┘
-       │
-       ├─────────────┬─────────────┬──────────────┐
-       │             │             │              │
-┌──────▼──────┐ ┌───▼────────┐ ┌─▼─────────┐ ┌──▼──────────┐
-│ BoxService  │ │ GoogleDrive│ │Conversion │ │ Migration   │
-│             │ │ Service    │ │ Service   │ │ Repository  │
-└─────────────┘ └────────────┘ └───────────┘ └─────────────┘
-       │             │             │              │
-       └─────────────┴─────────────┴──────────────┘
-                      │
-              ┌───────▼────────┐
-              │ Migration      │
-              │ TaskProcessor  │
-              │ (per file)     │
-              └────────────────┘
-```
+| Error | Solution |
+|-------|----------|
+| Box credentials not configured | Set `box.config.file` or `box.developer.token` in properties |
+| Google credentials file not configured | Set `google.credentials.file` to valid JSON path |
+| File already exists at destination | By design (no overwrite). Remove from Drive or skip in CSV |
+| Failed to download from Box | Verify file ID exists and app has read permissions |
+| Security error uploading | Check domain-wide delegation and OAuth scopes |
 
 ## License
 
-This is a proprietary migration tool. All rights reserved.
-
-## Support
-
-For issues or questions:
-- Check the logs in `logs/migration-{date}.log`
-- Query the database for detailed error messages
-- Review Box and Google API documentation
+Proprietary migration tool. All rights reserved.

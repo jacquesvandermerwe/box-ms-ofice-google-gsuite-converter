@@ -14,6 +14,9 @@ import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 
+import org.springframework.stereotype.Service;
+
+@Service
 public class ConversionService {
     private static final Logger logger = LoggerFactory.getLogger(ConversionService.class);
     private final CredentialsManager credentialsManager;

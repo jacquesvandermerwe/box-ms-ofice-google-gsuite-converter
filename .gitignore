@@ -12,7 +12,6 @@ logs/
 migration-results.db
 
 # Configuration files with credentials
-src/main/resources/application.properties
 *.json
 credentials.json
 service-account*.json
@@ -62,3 +61,4 @@ Thumbs.db
 *.tmp
 *.bak
 *.swp
+src/main/resources/application.properties

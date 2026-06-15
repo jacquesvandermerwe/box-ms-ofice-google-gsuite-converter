@@ -52,10 +52,10 @@ int threadPoolSize = config.getThreadPoolSize(); // 5-10
 executorService = Executors.newFixedThreadPool(threadPoolSize);
 ```
 
-**After (Virtual Threads)**:
+**After (Virtual Threads via Spring Batch)**:
 ```java
-int maxConcurrency = config.getThreadPoolSize(); // 100-500
-executorService = Executors.newVirtualThreadPerTaskExecutor();
+SimpleAsyncTaskExecutor taskExecutor = new SimpleAsyncTaskExecutor("batch-virtual-");
+taskExecutor.setVirtualThreads(true);
 ```
 
 ### Configuration
@@ -126,12 +126,10 @@ With virtual threads, you can easily overwhelm API rate limits:
 - **Queries per minute**: 1,000
 - **Queries per 100 seconds per user**: 1,000
 
-### Monitoring Virtual Thread Performance
-
 Add JVM flags to monitor virtual threads:
 ```bash
 java -Djdk.tracePinnedThreads=full \
-     -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+     -jar target/box-google-converter-1.0-SNAPSHOT.jar
 ```
 
 ## Real-World Performance Examples
@@ -194,7 +192,7 @@ sudo apt install openjdk-21-jdk
 All code changes are **backward compatible**. The only changes needed:
 
 1. ✅ Update `pom.xml` to Java 21
-2. ✅ Replace `Executors.newFixedThreadPool()` with `Executors.newVirtualThreadPerTaskExecutor()`
+2. ✅ Configure Spring Batch `TaskExecutor` with virtual threads (`spring.threads.virtual.enabled=true`)
 3. ✅ Update thread pool size recommendations in config
 
 **No other code changes required!**
@@ -271,7 +269,7 @@ try { ... } finally { lock.unlock(); }
 1. Create a test CSV with 10 files
 2. Run migration and time it:
    ```bash
-   time java -jar target/box-google-converter-1.0-SNAPSHOT-jar-with-dependencies.jar
+   time java -jar target/box-google-converter-1.0-SNAPSHOT.jar
    ```
 3. Check logs for throughput
 4. Adjust `thread.pool.size` based on results
